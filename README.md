@@ -17,15 +17,15 @@ XP and loot rolls, spend it on gear and cosmetics, then prestige when the season
 | Vault | Type |
 | --- | --- |
 | Fish Dash | endless swim; dash through hazards, hunt the Lumina Fish |
-| Ice Fishing | time the cast, then steer the lure deep for fish and treasure |
+| Ice Fishing | time the cast, then fly the lure down - the camera rides with it |
 | Floe Survival | wave arena with a floating joystick, orca boss every 10 waves |
 | Pearl Match | connected-blob match-3 bonus room |
 | Belly Slide Race | rhythm slide, jump gaps, trick off ramps |
 | Clam Dig | dig-timing on the beach; misses make the next dig easier |
 | Synchronized Swim | endless four-lane rhythm; ten misses ends it |
-| Iceberg Balance | spring-physics teeter on a shrinking berg |
+| Iceberg Balance | spring-physics teeter; gulls pile onto the low side |
 | Seagull Chase | swat gulls, incl. golden thieves and the Radiant Gull |
-| Deep Dive | fly a narrowing trench on one breath - depth only counts if you surface |
+| Deep Dive | narrowing trench + orca chambers, one breath; depth counts only if you surface |
 | Aurora Watch | calm memory round under the northern lights |
 
 **220 cosmetics** across 8 slots that all stack — fur pattern, headwear, face, neck/back,
@@ -52,8 +52,9 @@ after you own the cosmetic pays out a large fish bonus instead.
 
 ## Controls
 
-- **Move** — arrow keys / WASD, the on-screen d-pad, or drag anywhere on the canvas: a
-  floating joystick appears under your thumb in Fish Dash, Floe Survival and Deep Dive
+- **Move** — arrow keys / WASD, or the on-screen controls. Fish Dash, Floe Survival and
+  Deep Dive swap the d-pad for an analog **thumbstick** so you can steer diagonally; you
+  can also drag anywhere on the canvas and a floating stick appears under your thumb
 - **A** — Space / Z / Enter, or the A button
 - **B** — X / Shift, or the B button
 - **Esc** — back out of a screen or leave a vault run
