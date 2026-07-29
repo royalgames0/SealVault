@@ -61,6 +61,20 @@ Progress is written to `localStorage` for this browser automatically. `SYS → E
 downloads a `.json` backup; `IMPORT FILE` or `PASTE SAVE` restores it on any device.
 Damaged or hand-edited saves are sanitised on load rather than crashing the game.
 
+### Auto-save file (Chrome / Edge on desktop)
+
+`SYS → LINK A SAVE FILE` lets you pick a `.json` once. After that the game writes every
+save straight to that file and loads it back automatically next time you open the game —
+no exporting, no importing, and it survives a cache clear.
+
+This uses the File System Access API, so it is **desktop Chrome and Edge only**. Firefox,
+Safari and every phone browser fall back to the manual export/import above, and the
+settings panel says so rather than showing a button that does nothing.
+
+Two safeguards worth knowing: writes are throttled so rapid autosaves batch into one disk
+write, and on load the game compares timestamps — whichever of the file or the browser save
+is newer wins, so neither can silently clobber the other.
+
 ## Accessibility
 
 High-contrast palette, larger tap targets, reduced flashing, adjustable text size, and

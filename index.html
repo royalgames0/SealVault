@@ -1223,7 +1223,7 @@ const TRIMS = [null,'#cdd8e8','#7be08a','#4fd6ff','#b06bff','#ffd166'];
 function defaultState(){
   const owned = {}; STARTER_ITEMS.forEach(id=> owned[id] = 1);
   return {
-    v:1, created:Date.now(),
+    v:1, created:Date.now(), savedAt:0,
     fish:0, pearls:0, xp:0, level:1, prestige:0, lifetimeFish:0,
     gear:{blubber:0,speed:0,luck:0,magnet:0,lungs:0,grip:0},
     owned:owned,
@@ -1241,9 +1241,152 @@ function defaultState(){
 let State = defaultState();
 
 function saveGame(){
+  State.savedAt = Date.now();
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(State)); }
   catch(e){ console.warn('save failed', e); }
+  FileSave.touch();
 }
+
+/* ============================================================
+   8b. LINKED SAVE FILE
+   Chrome/Edge desktop expose the File System Access API, which lets the
+   game keep a real .json on disk in sync and re-open it on the next
+   visit. The handle survives reloads inside IndexedDB. Everywhere else
+   (Firefox, Safari, all phones) the API does not exist, so the button
+   falls back to the ordinary download + import flow.
+   ============================================================ */
+const FS_OK = typeof window.showSaveFilePicker === 'function' && typeof indexedDB !== 'undefined';
+const IDB_DB = 'sealvault', IDB_STORE = 'handles', IDB_KEY = 'saveFile';
+function idbOpen(){
+  return new Promise((res, rej)=>{
+    const r = indexedDB.open(IDB_DB, 1);
+    r.onupgradeneeded = ()=>{ if (!r.result.objectStoreNames.contains(IDB_STORE)) r.result.createObjectStore(IDB_STORE); };
+    r.onsuccess = ()=> res(r.result);
+    r.onerror = ()=> rej(r.error);
+  });
+}
+async function idbGet(k){
+  try { const db = await idbOpen();
+    return await new Promise((res, rej)=>{
+      const q = db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(k);
+      q.onsuccess = ()=> res(q.result); q.onerror = ()=> rej(q.error);
+    });
+  } catch(e){ return null; }
+}
+async function idbSet(k, v){
+  try { const db = await idbOpen();
+    return await new Promise((res, rej)=>{
+      const q = db.transaction(IDB_STORE,'readwrite').objectStore(IDB_STORE)[v === null ? 'delete' : 'put'](v === null ? k : v, v === null ? undefined : k);
+      q.onsuccess = ()=> res(1); q.onerror = ()=> rej(q.error);
+    });
+  } catch(e){ return null; }
+}
+const FileSave = {
+  handle:null, name:'', status: FS_OK ? 'off' : 'unsupported',
+  pending:false, lastWrite:0, timer:null,
+  supported(){ return FS_OK; },
+  /* called on every saveGame - throttled so we do not hammer the disk */
+  touch(){
+    if (this.status !== 'linked') return;
+    this.pending = true;
+    if (this.timer) return;
+    const wait = Math.max(0, 8000 - (Date.now() - this.lastWrite));
+    this.timer = setTimeout(()=>{ this.timer = null; this.flush(); }, wait);
+  },
+  async flush(){
+    if (this.status !== 'linked' || !this.handle || !this.pending) return;
+    this.pending = false; this.lastWrite = Date.now();
+    try {
+      const w = await this.handle.createWritable();
+      await w.write(JSON.stringify(State, null, 1));
+      await w.close();
+    } catch(e){
+      this.status = 'needs-permission';
+      toast('SAVE FILE LOCKED - RELINK IN SYS');
+      if (UI.openIds.indexOf('scr-settings') >= 0) UI.renderSettings();
+    }
+  },
+  async link(){
+    if (!FS_OK){ saveGame(); exportSave(); return; }
+    try {
+      const h = await window.showSaveFilePicker({
+        suggestedName: 'sealvault-save.json',
+        types: [{description:'Seal Vault save', accept:{'application/json':['.json']}}]
+      });
+      this.handle = h; this.name = h.name; this.status = 'linked';
+      await idbSet(IDB_KEY, h);
+      this.pending = true; await this.flush();
+      toast('AUTO-SAVING TO ' + h.name.toUpperCase());
+    } catch(e){ /* the picker was dismissed - nothing to do */ }
+    UI.renderSettings();
+  },
+  async unlink(){
+    this.handle = null; this.name = ''; this.status = FS_OK ? 'off' : 'unsupported';
+    await idbSet(IDB_KEY, null);
+    toast('SAVE FILE UNLINKED');
+    UI.renderSettings();
+  },
+  /* re-grant after a browser restart; must run from a click */
+  async regrant(){
+    if (!this.handle) return false;
+    try {
+      const p = await this.handle.requestPermission({mode:'readwrite'});
+      if (p === 'granted'){ this.status = 'linked'; return true; }
+    } catch(e){}
+    return false;
+  },
+  async readFile(){
+    if (!this.handle) return null;
+    try { const f = await this.handle.getFile(); const t = await f.text(); return JSON.parse(t); }
+    catch(e){ return null; }
+  },
+  /* pull the linked file in, but never silently overwrite newer progress */
+  async adopt(){
+    const data = await this.readFile();
+    if (!data || typeof data !== 'object' || data.owned === undefined) return 'empty';
+    const fileAt = Number(data.savedAt) || 0, localAt = Number(State.savedAt) || 0;
+    if (fileAt >= localAt){
+      State = sanitize(deepMerge(defaultState(), data));
+      STARTER_ITEMS.forEach(id=> State.owned[id] = 1);
+      if (!State.owned[State.equipped.fur]) State.equipped.fur = 'fur_harborgrey';
+      applyOptions(); UI.refreshAll(); Hub.init();
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(State)); } catch(e){}
+      return 'file';
+    }
+    this.pending = true; await this.flush();       /* local was ahead - push it out */
+    return 'local';
+  },
+  async boot(){
+    if (!FS_OK) return;
+    const h = await idbGet(IDB_KEY);
+    if (!h) return;
+    this.handle = h; this.name = h.name || 'save.json';
+    let p = 'prompt';
+    try { p = await h.queryPermission({mode:'readwrite'}); } catch(e){ p = 'prompt'; }
+    if (p === 'granted'){
+      this.status = 'linked';
+      const from = await this.adopt();
+      if (from === 'file') toast('LOADED ' + this.name.toUpperCase());
+    } else if (p !== 'denied'){
+      this.status = 'needs-permission';
+      this.askResume();
+    }
+  },
+  askResume(){
+    modal('Linked save file',
+      'This browser has <b>' + this.name + '</b> linked as your save file.<br><br>' +
+      'Your browser needs one click to let the game read and write it again.',
+      [{t:'CONTINUE FROM FILE', keep:true, fn:null}, {t:'NOT NOW', fn:()=>{ this.status = 'needs-permission'; }}]);
+    const btn = $('#modalbox .row button');
+    btn.onclick = async ()=>{
+      const ok = await this.regrant();
+      closeModal();
+      if (ok){ const from = await this.adopt();
+        toast(from === 'local' ? 'FILE WAS OLDER - KEPT THIS BROWSER SAVE' : 'LOADED ' + this.name.toUpperCase()); }
+      else toast('PERMISSION DENIED - USING BROWSER SAVE');
+    };
+  }
+};
 function deepMerge(base, src){
   if (!src || typeof src !== 'object') return base;
   for (const k in base){
@@ -1974,6 +2117,48 @@ const UI = {
     fsRow.appendChild(fsr); acc.appendChild(fsRow);
     acc.appendChild(el('div','tagline','RARITY IS SHOWN BY SHAPE AND TEXT AS WELL AS COLOUR.'));
     b.appendChild(acc);
+
+    /* ---- linked save file ---- */
+    const link = el('div','card');
+    const fs = FileSave;
+    if (!fs.supported()){
+      link.innerHTML = '<h3>Auto-Save File</h3>' +
+        '<div class="muted">This browser cannot write directly to a file. That feature needs the File System Access API, ' +
+        'which today only Chrome and Edge on desktop provide - not Firefox, Safari, or any phone browser.</div>' +
+        '<div class="tagline">USE EXPORT SAVE BELOW FOR A MANUAL BACKUP.</div>';
+    } else if (fs.status === 'linked'){
+      link.innerHTML = '<h3>Auto-Save File <span class="done">ON</span></h3>' +
+        '<div class="muted">Every save is written to <b>' + fs.name + '</b> automatically, and the game reloads it when you come back.</div>';
+      const row = el('div','row'); row.style.marginTop = '6px';
+      const now = el('button','iconbtn','SAVE NOW');
+      now.onclick = async ()=>{ saveGame(); fs.pending = true; await fs.flush(); toast('WRITTEN TO ' + fs.name.toUpperCase()); };
+      const un = el('button','iconbtn','UNLINK'); un.onclick = ()=> fs.unlink();
+      row.appendChild(now); row.appendChild(un); link.appendChild(row);
+    } else if (fs.status === 'needs-permission'){
+      link.innerHTML = '<h3>Auto-Save File <span style="color:var(--accent2)">PAUSED</span></h3>' +
+        '<div class="muted"><b>' + fs.name + '</b> is linked but the browser revoked access, which it does after a restart. One click restores it.</div>';
+      const row = el('div','row'); row.style.marginTop = '6px';
+      const re = el('button','iconbtn','RECONNECT FILE');
+      re.onclick = async ()=>{
+        const ok = await fs.regrant();
+        if (ok){ const from = await fs.adopt();
+          toast(from === 'local' ? 'FILE WAS OLDER - KEPT BROWSER SAVE' : 'RECONNECTED'); }
+        else toast('PERMISSION DENIED');
+        this.renderSettings();
+      };
+      const un = el('button','iconbtn','UNLINK'); un.onclick = ()=> fs.unlink();
+      row.appendChild(re); row.appendChild(un); link.appendChild(row);
+    } else {
+      link.innerHTML = '<h3>Auto-Save File</h3>' +
+        '<div class="muted">Pick a .json file once. After that the game keeps it in sync on every save and loads it back automatically ' +
+        'when you next open the game - no exporting, no importing.</div>';
+      const btn = el('button','iconbtn','LINK A SAVE FILE');
+      btn.style.marginTop = '6px';
+      btn.onclick = ()=> fs.link();
+      link.appendChild(btn);
+      link.appendChild(el('div','tagline','SURVIVES CACHE CLEARS AND SAFARI-STYLE STORAGE EVICTION.'));
+    }
+    b.appendChild(link);
 
     const save = el('div','card'); save.innerHTML = '<h3>Save Data</h3><div class="muted">Progress is stored in this browser. Export a .json backup to move it to another device.</div>';
     const row = el('div','row'); row.style.marginTop='6px'; row.style.flexWrap='wrap';
@@ -4080,27 +4265,31 @@ function boot(){
   setScene('hub');
   fitStage();
   saveGame();
-  /* first-run welcome */
-  if (State.stats.totalRolls === 0 && !State.lifetimeFish){
-    setTimeout(()=>{
-      modal('Welcome to Seal Vault',
-        'You are a seal. So is everyone else.<br><br>Walk the floe with <kbd>ARROWS</kbd> or the pad, press <kbd>A</kbd> at the '+
-        'VAULT GATE to dive into a minigame, and bring fish home for gear and cosmetics.<br><br>'+
-        '<span class="muted">Progress saves in this browser. SYS > EXPORT SAVE makes a backup file.</span>',
-        [{t:'LETS GO'},{t:'HOW TO PLAY', fn:()=>UI.open('scr-help')}]);
-    }, 400);
-  }
   setInterval(()=>{ if (!UI.anyOpen()) saveGame(); }, 20000);
-  addEventListener('visibilitychange', ()=>{ if (document.hidden) saveGame(); });
+  addEventListener('visibilitychange', ()=>{ if (document.hidden){ saveGame(); FileSave.flush(); } });
   addEventListener('beforeunload', saveGame);
+  addEventListener('pagehide', ()=>{ saveGame(); FileSave.flush(); });
+  /* re-attach the linked save file first, so its own prompt never races the welcome */
+  Promise.resolve(FileSave.boot()).catch(()=>{}).then(()=> setTimeout(firstRunWelcome, 350));
   requestAnimationFrame(frame);
+}
+function firstRunWelcome(){
+  if ($('#modal').classList.contains('show')) return;        /* the file resume prompt owns the screen */
+  if (FileSave.status === 'needs-permission') return;
+  if (State.stats.totalRolls || State.lifetimeFish) return;   /* not a new player */
+  modal('Welcome to Seal Vault',
+    'You are a seal. So is everyone else.<br><br>Walk the floe with <kbd>ARROWS</kbd> or the pad, press <kbd>A</kbd> at the '+
+    'VAULT GATE to dive into a minigame, and bring fish home for gear and cosmetics.<br><br>'+
+    '<span class="muted">Progress saves in this browser. SYS has a backup file and an auto-save option.</span>',
+    [{t:'LETS GO'},{t:'HOW TO PLAY', fn:()=>UI.open('scr-help')}]);
 }
 /* debug/test hook - lets a harness drive the game without a human */
 window.SV = {State:()=>State, COS:COS, GAMES:GAMES, start:startGame, scene:()=>Scene.name, UI:UI,
   finish:(o)=>finishGame(o||{score:1,fish:10,xp:5,rolls:1}), rollLoot:rollLoot, save:saveGame,
   grant:(id)=>grantItem(id), quests:QUESTS, hub:Hub, runner:Runner, audio:Audio_, input:Input,
   sealCanvas:sealCanvas, thumb:itemThumbCanvas, CANW:CANW, CANH:CANH, PADX:PADX, PADY:PADY,
-  version:'1.0.0'};
+  fileSave:FileSave, importText:importSaveText, load:loadGame,
+  version:'1.1.0'};
 boot();
 
 })();
