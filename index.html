@@ -99,6 +99,18 @@ body.noflash #stage.shake{animation:none;}
      padding:8px 10px 10px;gap:10px;flex:1 1 auto;min-height:0;}
 #dpad{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
       width:min(46vw,196px);aspect-ratio:1/1;gap:3px;}
+/* analog thumbstick, shown in place of the d-pad in free-movement vaults */
+#stickpad{display:none;position:relative;width:min(46vw,196px);aspect-ratio:1/1;border-radius:50%;
+  background:radial-gradient(circle at 50% 45%, var(--panel2) 0%, var(--panel) 72%);
+  border:3px solid var(--line);touch-action:none;flex:0 0 auto;}
+body.stickmode #stickpad{display:block;}
+body.stickmode #dpad{display:none;}
+#stickpad::after{content:'';position:absolute;inset:26%;border-radius:50%;
+  border:2px dashed var(--line);opacity:.45;pointer-events:none;}
+#knob{position:absolute;left:50%;top:50%;width:38%;height:38%;margin-left:-19%;margin-top:-19%;
+  border-radius:50%;background:var(--accent);border:3px solid #04101f;
+  box-shadow:0 3px 8px rgba(0,0,0,.55);pointer-events:none;transition:background .1s;}
+#stickpad.grab #knob{background:var(--accent2);}
 .pbtn{background:var(--panel2);border:2px solid var(--line);border-radius:8px;color:var(--ink);
       display:flex;align-items:center;justify-content:center;font-weight:800;font-size:calc(15px * var(--fs));
       touch-action:none;}
@@ -107,7 +119,7 @@ body.noflash #stage.shake{animation:none;}
 #abtns{display:flex;gap:10px;align-items:center;}
 #abtns .pbtn{width:min(22vw,92px);height:min(22vw,92px);border-radius:50%;font-size:calc(16px * var(--fs));}
 #abtns .pbtn.b{background:var(--panel);}
-#hintline{position:absolute;left:0;right:0;bottom:4px;text-align:center;color:var(--dim);
+#hintline{flex:1 1 100%;text-align:center;color:var(--dim);min-height:1.2em;
           font-size:calc(11px * var(--fs));pointer-events:none;}
 
 /* ---------- overlay screens ---------- */
@@ -237,9 +249,11 @@ input[type=range]{width:100%;accent-color:var(--accent);}
       <button class="iconbtn" id="qLoot">LOOT</button>
       <button class="iconbtn" id="qHelp">?</button>
     </div>
+    <div id="hintline"></div>
   </div>
 
   <div id="pad">
+    <div id="stickpad"><div id="knob"></div></div>
     <div id="dpad">
       <div class="sp"></div><div class="pbtn" data-k="up">▲</div><div class="sp"></div>
       <div class="pbtn" data-k="left">◀</div><div class="sp"></div><div class="pbtn" data-k="right">▶</div>
@@ -249,7 +263,6 @@ input[type=range]{width:100%;accent-color:var(--accent);}
       <div class="pbtn b" data-k="b">B</div>
       <div class="pbtn" data-k="a">A</div>
     </div>
-    <div id="hintline"></div>
   </div>
 </div>
 
@@ -2329,9 +2342,9 @@ $('#importFile').onchange = e=>{
    12. MINIGAME REGISTRY + ROTATION
    ============================================================ */
 const GAMES = {
-  dash:    {n:'Fish Dash',        d:'Endless swim. Dodge nets, rocks and orcas, eat everything else.',      music:'action', tip:'MOVE TO DODGE - B FOR A DASH'},
-  ice:     {n:'Ice Fishing',      d:'Time the cast, then steer the lure deep. Ten fish reels the line in.',  music:'calm',   tip:'A TO CAST - LEFT/RIGHT TO STEER'},
-  floe:    {n:'Floe Survival',    d:'Wave arena. Auto-slap anything close. Boss every 10 waves.',           music:'action', tip:'DRAG TO STEER - AUTO ATTACK'},
+  dash:    {n:'Fish Dash',        d:'Endless swim. Dodge nets, rocks and orcas, eat everything else.',      music:'action', tip:'THUMBSTICK TO SWIM - B DASH', analog:1},
+  ice:     {n:'Ice Fishing',      d:'Time the cast, then fly the lure down. Ten fish reels the line in.',    music:'calm',   tip:'A TO CAST - LEFT/RIGHT TO STEER'},
+  floe:    {n:'Floe Survival',    d:'Wave arena. Auto-slap anything close. Boss every 10 waves.',           music:'action', tip:'THUMBSTICK OR DRAG - AUTO ATTACK', analog:1},
   pearl:   {n:'Pearl Match',      d:'Match-3 bonus room. Pure loot, no danger.',                            music:'calm',   tip:'MOVE CURSOR - A TO SWAP'},
   slide:   {n:'Belly Slide Race', d:'Rhythm slide down the ice. Jump gaps, trick off ramps.',               music:'action', tip:'A JUMP - B TRICK IN AIR'},
   dig:     {n:'Clam Dig',         d:'Timing digs on the beach. Clams, crabs and empty shells.',             music:'calm',   tip:'MOVE - A TO DIG ON GREEN'},
@@ -2363,6 +2376,7 @@ function currentRotation(){
 const Scene = {name:'hub', t:0};
 function setScene(n){
   Scene.name = n; Scene.t = 0; Input.reset(); Particles.clear();
+  if (n !== 'game'){ document.body.classList.remove('stickmode'); Stick.clearPad(); Stick.reset(); }
   if (n === 'hub') Audio_.play('hub');
   if (n === 'results') Audio_.play('win');
   updateHint();
@@ -2770,6 +2784,8 @@ function startGame(key){
   if (!g || !g.start) { toast('VAULT SEALED'); return; }
   Runner.key = key; Runner.g = g; Runner.paused = false;
   Particles.clear();
+  Stick.clearPad(); Stick.reset();
+  document.body.classList.toggle('stickmode', !!g.analog);
   g.start();
   setScene('game');
   Audio_.play(g.music || 'action');
@@ -2902,9 +2918,14 @@ function bigMsg(c, s, sub, y){
    drag to steer in any direction, including diagonals. Falls back to the
    d-pad and keyboard, which stay fully usable.                        */
 const Stick = {
+  /* two sources: the visible DOM thumbstick, and a drag anywhere on the canvas */
+  padOn:false, padX:0, padY:0, padMag:0,
   active:false, ox:0, oy:0, x:0, y:0, mag:0, R:20,
   reset(){ this.active = false; this.mag = 0; this.x = this.y = 0; },
-  poll(){
+  /* called by the DOM widget */
+  setPad(x, y, mag){ this.padOn = true; this.padX = x; this.padY = y; this.padMag = mag; },
+  clearPad(){ this.padOn = false; this.padX = this.padY = this.padMag = 0; },
+  pollCanvas(){
     if (Input.ptr.down){
       if (!this.active){ this.active = true; this.ox = Input.ptr.x; this.oy = Input.ptr.y; }
       let dx = Input.ptr.x - this.ox, dy = Input.ptr.y - this.oy;
@@ -2914,30 +2935,53 @@ const Stick = {
         dx *= this.R/d; dy *= this.R/d;
       }
       this.mag = Math.min(1, d / this.R);
-      if (d > 0.001){ this.x = dx/Math.max(d, this.R*this.mag||1); this.y = dy/Math.max(d, this.R*this.mag||1); }
       const n = Math.hypot(dx, dy) || 1;
       this.x = dx/n * this.mag; this.y = dy/n * this.mag;
       if (this.mag < 0.16){ this.x = this.y = 0; this.mag = 0; }
     } else this.reset();
   },
-  /* returns a normalised direction with magnitude, or null when idle */
+  /* normalised direction with magnitude, or null when nothing is held */
   read(){
-    this.poll();
+    this.pollCanvas();
+    if (this.padOn && this.padMag > 0) return {x:this.padX, y:this.padY, mag:this.padMag};
     return (this.active && this.mag > 0) ? {x:this.x, y:this.y, mag:this.mag} : null;
   },
   draw(c){
-    if (!this.active) return;
+    if (this.padOn || !this.active) return;    /* the DOM widget draws itself */
     const ox = this.ox|0, oy = this.oy|0;
-    c.globalAlpha = 0.32; c.fillStyle = '#9ee5ff';
+    c.globalAlpha = 0.45; c.fillStyle = '#9ee5ff';
     for (let a=0;a<16;a++){
       const px = ox + Math.cos(a*Math.PI/8)*this.R, py = oy + Math.sin(a*Math.PI/8)*this.R;
       c.fillRect(px|0, py|0, 2, 2);
     }
-    c.globalAlpha = 0.75; c.fillStyle = '#ffffff';
+    c.globalAlpha = 0.9; c.fillStyle = '#ffffff';
     c.fillRect((ox + this.x*this.R - 3)|0, (oy + this.y*this.R - 3)|0, 6, 6);
     c.globalAlpha = 1;
   }
 };
+/* wire up the DOM thumbstick */
+(function(){
+  const pad = document.getElementById('stickpad'), knob = document.getElementById('knob');
+  let held = false;
+  const set = (e)=>{
+    const r = pad.getBoundingClientRect();
+    const cx = r.left + r.width/2, cy = r.top + r.height/2, R = r.width*0.30;
+    let dx = e.clientX - cx, dy = e.clientY - cy;
+    const d = Math.hypot(dx, dy) || 0.0001;
+    const mag = Math.min(1, d / R);
+    dx = dx/d; dy = dy/d;
+    Stick.setPad(dx*mag, dy*mag, mag < 0.14 ? 0 : mag);
+    knob.style.transform = 'translate(' + (dx*mag*R) + 'px,' + (dy*mag*R) + 'px)';
+  };
+  const up = ()=>{ held = false; Stick.clearPad(); pad.classList.remove('grab');
+                   knob.style.transform = 'translate(0,0)'; };
+  pad.addEventListener('pointerdown', e=>{
+    e.preventDefault(); Audio_.resume(); held = true; pad.classList.add('grab'); set(e);
+    if (pad.setPointerCapture){ try { pad.setPointerCapture(e.pointerId); } catch(_){} }
+  });
+  pad.addEventListener('pointermove', e=>{ if (held){ e.preventDefault(); set(e); } });
+  ['pointerup','pointercancel','pointerleave'].forEach(t=> pad.addEventListener(t, e=>{ e.preventDefault(); up(); }));
+})();
 function quitCheck(){
   if (Input.hit('esc')){
     modal('Leave the vault?', 'Your run ends with no reward.', [
@@ -3154,44 +3198,51 @@ Object.assign(GAMES.dash, {
 });
 
 /* ============================================================
-   20. ICE FISHING - time the throw, then steer the bobber down
-   One click sets the cast. After that you drive the lure with
-   left/right, hooking fish and treasure and dodging predators.
-   Ten fish reels the line in; a predator costs you the line and
-   everything still hanging on it. Banked catches are safe.
+   20. ICE FISHING - time the cast, then fly the lure down
+   The camera rides down with the bobber, and the line is a real
+   trailing curve from the hole rather than a fixed vertical bar.
+   Ten fish reels the line in; a predator costs the line and
+   everything on it. Banked catches can never be lost.
    ============================================================ */
 const ICE_FISH = [
-  {n:'SPRAT',   v:14,  col:'#9ee5ff', d:0},
-  {n:'HERRING', v:30,  col:'#7fd4ff', d:1},
-  {n:'COD',     v:62,  col:'#5be584', d:2},
-  {n:'SALMON',  v:120, col:'#ff9ecb', d:3},
-  {n:'HALIBUT', v:220, col:'#ffd166', d:4},
-  {n:'MOONFISH',v:420, col:'#b06bff', d:5}
+  {n:'SPRAT',    v:14,  col:'#9ee5ff'},
+  {n:'HERRING',  v:32,  col:'#7fd4ff'},
+  {n:'COD',      v:68,  col:'#5be584'},
+  {n:'SALMON',   v:135, col:'#ff9ecb'},
+  {n:'HALIBUT',  v:250, col:'#ffd166'},
+  {n:'MOONFISH', v:480, col:'#b06bff'}
 ];
 const ICE_TREASURE = [
-  {n:'OLD BOOT',    v:25,  col:'#8a5a34'},
-  {n:'CLAM PURSE',  v:110, col:'#e8cf9a'},
-  {n:'SILVER CUP',  v:230, col:'#cdd8e8'},
-  {n:'PEARL CHEST', v:460, col:'#f2e9ff'},
-  {n:'LOST CROWN',  v:900, col:'#ffd166'}
+  {n:'OLD BOOT',    v:30,  col:'#8a5a34'},
+  {n:'CLAM PURSE',  v:120, col:'#e8cf9a'},
+  {n:'SILVER CUP',  v:260, col:'#cdd8e8'},
+  {n:'PEARL CHEST', v:520, col:'#f2e9ff'},
+  {n:'LOST CROWN',  v:980, col:'#ffd166'}
 ];
 const ICE_THROWS = [
-  {n:'EASY',   zone:40, spd:1.9, mult:1.0},
-  {n:'NORMAL', zone:26, spd:2.8, mult:1.35},
-  {n:'HARD',   zone:15, spd:3.9, mult:1.9}
+  {n:'EASY',   zone:42, spd:1.8, mult:1.00},
+  {n:'NORMAL', zone:26, spd:2.7, mult:1.35},
+  {n:'HARD',   zone:15, spd:3.8, mult:1.90}
 ];
-const ICE_TOP = 74, ICE_BOTTOM = 150;
+const ICE_SURF = 60;        /* screen y of the ice underside when the camera is home */
+const ICE_HOLE = 120;       /* world x of the hole the line runs through */
+const ICE_MAXD = 1150;      /* seabed depth in world pixels */
+const ICE_PSTEP = 4;        /* line sampled every this many world px */
 Object.assign(GAMES.ice, {
   start(){
     this.s = {
-      state:'cast', lines:3, thrown:0, banked:0, score:0, t:0, over:0,
-      bar:0, dir:1, quality:1,                 /* the throw QTE */
-      bx:120, by:ICE_TOP, vy:0.42, onLine:[], depth:0, deepest:0,
+      state:'cast', lines:3, thrown:0, score:0, t:0, over:0,
+      bar:0, dir:1, quality:1,
+      bx:ICE_HOLE, wy:0, vy:0.5, cam:0, path:[], onLine:[],
       ents:[], spawn:0, msg:'TIME THE CAST', msgT:90, flash:0,
-      caught:0, treasures:0, legend:false, hookFx:0, reelT:0, reelKeep:false
+      caught:0, treasures:0, legend:false, hookFx:0, reelT:0,
+      deepest:0, freeCast:false, banked:0
     };
   },
-  throwCfg(){ return ICE_THROWS[Math.min(this.s.thrown, ICE_THROWS.length-1)]; },
+  cfg(){ return ICE_THROWS[Math.min(this.s.thrown, ICE_THROWS.length-1)]; },
+  sy(wy){ return ICE_SURF + (wy - this.s.cam); },      /* world depth -> screen y */
+  /* depth band 0..1 used to pick how rich the water is */
+  richness(){ return clamp(this.s.wy / (ICE_MAXD*0.85), 0, 1); },
   update(){
     const g = this.s;
     if (quitCheck()) return;
@@ -3201,8 +3252,9 @@ Object.assign(GAMES.ice, {
     if (g.hookFx>0) g.hookFx--;
     if (g.over){ if (--g.over <= 0) this.done(); Particles.update(); return; }
 
+    /* ---- the cast timing bar ---- */
     if (g.state === 'cast'){
-      const cfg = this.throwCfg();
+      const cfg = this.cfg();
       g.bar += g.dir * cfg.spd;
       if (g.bar > 100){ g.bar = 100; g.dir = -1; }
       if (g.bar < 0){ g.bar = 0; g.dir = 1; }
@@ -3212,221 +3264,284 @@ Object.assign(GAMES.ice, {
         else if (d <= half){ g.quality = 1; g.msg = 'GOOD CAST'; Audio_.sfx('good'); }
         else { g.quality = 0; g.msg = 'SLOPPY CAST'; Audio_.sfx('fail'); }
         g.msgT = 60;
-        g.state = 'sink'; g.by = ICE_TOP; g.bx = 120; g.onLine = []; g.depth = 0;
-        g.ents = []; g.spawn = 24;
-        /* a better cast sinks faster and finds richer water */
-        g.vy = 0.30 + g.quality*0.10;
+        g.state = 'sink';
+        g.wy = 0; g.bx = ICE_HOLE; g.cam = 0; g.path = []; g.onLine = [];
+        g.ents = []; g.spawn = 20;
+        g.vy = 0.42 + g.quality*0.11;
       }
       return;
     }
 
+    /* ---- reeling back up ---- */
     if (g.state === 'reel'){
-      g.reelT--;
-      g.by -= 3.4;
-      if (g.by <= ICE_TOP || g.reelT <= 0){ this.landLine(); }
+      g.wy = Math.max(0, g.wy - 7);
+      this.follow();
+      this.relaxLine();
+      if (g.wy <= 0){ this.landLine(); }
       Particles.update();
       return;
     }
 
-    /* ---- sinking: steer the bobber ---- */
+    /* ---- sinking: steer left and right ---- */
     let mx = 0;
     if (Input.key('left')) mx -= 1;
     if (Input.key('right')) mx += 1;
-    if (Input.ptr.down){ const d = Input.ptr.x - g.bx; if (Math.abs(d) > 4) mx = d>0?1:-1; }
-    g.bx = clamp(g.bx + mx*(1.9 + State.gear.speed*0.05), 10, VW-10);
-    /* slower descent while steering hard, so you can line things up */
-    g.by += g.vy;
-    g.depth = Math.max(0, Math.round((g.by - ICE_TOP) * 1.6));
-    g.deepest = Math.max(g.deepest, g.depth);
-    if (g.by > ICE_BOTTOM){ g.msg = 'HIT THE SEABED'; g.msgT = 60; g.reelT = 60; g.state = 'reel'; g.reelKeep = true; }
+    if (Input.ptr.down){ const d = Input.ptr.x - g.bx; if (Math.abs(d) > 4) mx = clamp(d/22,-1,1); }
+    g.bx = clamp(g.bx + mx*(2.0 + State.gear.speed*0.05), 12, VW-12);
+    g.wy += g.vy;
+    g.deepest = Math.max(g.deepest, Math.round(g.wy));
+    this.follow();
+    this.recordLine();
+    this.relaxLine();
 
-    /* spawn things at and below the lure */
+    if (g.wy >= ICE_MAXD){
+      g.msg = 'HIT THE SEABED - REELING IN'; g.msgT = 70;
+      g.state = 'reel'; Audio_.sfx('good');
+    }
+
+    /* spawn ahead of the lure */
     g.spawn--;
     if (g.spawn <= 0){
-      g.spawn = Math.max(14, 34 - g.depth/9);
-      const deepT = clamp(g.depth/120, 0, 1);
+      const rich = this.richness();
+      g.spawn = Math.max(16, 40 - rich*22);
       const r = Math.random();
-      if (r < 0.16 + deepT*0.16){
-        /* predators: orca up top, squid and eels deeper */
-        const kind = g.depth > 60 && chance(0.5) ? (chance(0.5)?'squid':'eel') : 'orca';
-        g.ents.push({t:'threat', kind:kind, x: chance(0.5)? -24 : VW+24, y: g.by + rnd(70,14),
-                     sp: (kind==='eel'? 1.5 : kind==='squid'? 0.85 : 1.15) * (1 + deepT*0.5),
-                     dir: 0, w: kind==='orca'?30:kind==='squid'?16:22, h: kind==='orca'?13:12, wob:rnd(6.28)});
-        g.ents[g.ents.length-1].dir = g.ents[g.ents.length-1].x < 0 ? 1 : -1;
-      } else if (r < 0.26 + deepT*0.10){
-        const tierMax = Math.min(ICE_TREASURE.length-1, Math.floor(deepT * ICE_TREASURE.length));
-        const tier = clamp(Math.floor(rnd(tierMax+1)), 0, ICE_TREASURE.length-1);
-        g.ents.push({t:'treasure', tier:tier, x:rnd(VW-24,12), y: g.by + rnd(80,26), w:12, h:10, wob:rnd(6.28)});
+      const below = g.wy + rnd(150, 70);
+      if (r < 0.17 + rich*0.15){
+        const kind = rich > 0.45 && chance(0.55) ? (chance(0.5)?'squid':'eel') : 'orca';
+        g.ents.push({t:'threat', kind:kind, x: chance(0.5)? -26 : VW+26, y: below,
+                     sp:(kind==='eel'?1.6:kind==='squid'?0.9:1.25)*(1+rich*0.6),
+                     dir:0, w:kind==='orca'?30:kind==='squid'?16:22, h:kind==='orca'?13:12, wob:rnd(6.28)});
+        const e = g.ents[g.ents.length-1]; e.dir = e.x < 0 ? 1 : -1;
+      } else if (r < 0.27 + rich*0.09){
+        const cap = Math.min(ICE_TREASURE.length-1, Math.floor(rich*ICE_TREASURE.length));
+        g.ents.push({t:'treasure', tier:clamp(Math.floor(rnd(cap+1)),0,ICE_TREASURE.length-1),
+                     x:rnd(VW-28,14), y:below, w:12, h:10, wob:rnd(6.28)});
       } else {
-        const tierMax = Math.min(ICE_FISH.length-1, Math.floor(deepT * ICE_FISH.length));
-        const tier = clamp(Math.round(rnd(tierMax+0.6)), 0, ICE_FISH.length-1);
-        g.ents.push({t:'fish', tier:tier, x: chance(0.5)? -16 : VW+16, y: g.by + rnd(80,10),
-                     sp: rnd(0.9,0.35) + tier*0.12, dir:0, w:10+tier, h:6, wob:rnd(6.28)});
-        g.ents[g.ents.length-1].dir = g.ents[g.ents.length-1].x < 0 ? 1 : -1;
+        const cap = Math.min(ICE_FISH.length-1, Math.floor(rich*ICE_FISH.length));
+        const tier = clamp(Math.round(rnd(cap+0.7)), 0, ICE_FISH.length-1);
+        g.ents.push({t:'fish', tier:tier, x: chance(0.5)? -18 : VW+18, y:below,
+                     sp:rnd(1.0,0.4)+tier*0.13, dir:0, w:10+tier, h:6, wob:rnd(6.28)});
+        const e = g.ents[g.ents.length-1]; e.dir = e.x < 0 ? 1 : -1;
       }
     }
 
     for (let i=g.ents.length-1;i>=0;i--){
       const e = g.ents[i];
-      if (e.t !== 'treasure'){
-        e.x += e.dir * e.sp;
-        e.y += Math.sin(g.t/26 + e.wob)*0.35;
-      } else e.y += Math.sin(g.t/34 + e.wob)*0.18;
-      if (e.x < -60 || e.x > VW+60 || e.y < g.by - 90){ g.ents.splice(i,1); continue; }
-      const hit = Math.abs(e.x + e.w/2 - g.bx) < e.w/2 + 5 && Math.abs(e.y + e.h/2 - g.by) < e.h/2 + 5;
+      if (e.t !== 'treasure'){ e.x += e.dir*e.sp; e.y += Math.sin(g.t/26+e.wob)*0.3; }
+      else e.y += Math.sin(g.t/34+e.wob)*0.15;
+      if (e.x < -70 || e.x > VW+70 || e.y < g.wy - 130){ g.ents.splice(i,1); continue; }
+      const hit = Math.abs(e.x + e.w/2 - g.bx) < e.w/2 + 5 && Math.abs(e.y - g.wy) < e.h/2 + 6;
       if (!hit) continue;
       if (e.t === 'fish'){
-        g.onLine.push({tier:e.tier, kind:'fish'});
-        g.ents.splice(i,1); g.hookFx = 12;
-        Audio_.sfx('fish');
-        Particles.burst(e.x, e.y, ICE_FISH[e.tier].col, 6, 1.6, 'sq');
+        g.onLine.push(e.tier);
+        g.ents.splice(i,1); g.hookFx = 12; Audio_.sfx('fish');
+        Particles.burst(e.x, this.sy(e.y), ICE_FISH[e.tier].col, 6, 1.6, 'sq');
         g.msg = ICE_FISH[e.tier].n + '  (' + g.onLine.length + '/10)'; g.msgT = 50;
         if (e.tier >= 4){ g.legend = true; State.stats.legendaryCatch = Math.max(State.stats.legendaryCatch||0, 1); }
-        if (g.onLine.length >= 10){ g.msg = 'FULL LINE - REELING IN'; g.msgT = 70; g.reelT = 70; g.state = 'reel'; g.reelKeep = true; Audio_.sfx('perfect'); }
+        if (g.onLine.length >= 10){
+          g.msg = 'FULL LINE - REELING IN'; g.msgT = 70; g.state = 'reel'; Audio_.sfx('perfect');
+        }
       } else if (e.t === 'treasure'){
-        /* treasure snaps the rod straight back up and costs no line */
-        g.treasures++;
         const tr = ICE_TREASURE[e.tier];
-        g.score += Math.round(tr.v * this.throwCfg().mult);
+        g.treasures++;
+        g.score += Math.round(tr.v * this.cfg().mult);
         g.ents.splice(i,1);
         Audio_.sfx('legend'); shake();
-        Particles.burst(e.x, e.y, tr.col, 16, 2.4, 'star');
+        Particles.burst(e.x, this.sy(e.y), tr.col, 18, 2.4, 'star');
         g.msg = tr.n + '! FREE CAST'; g.msgT = 90;
-        g.reelT = 60; g.state = 'reel'; g.reelKeep = true; g.freeCast = true;
+        g.freeCast = true; g.state = 'reel';
       } else {
-        /* predator: lose the line and everything on it */
-        g.lines--;
-        g.onLine = [];
-        g.ents.splice(i,1);
+        g.lines--; g.onLine = []; g.ents.splice(i,1);
         Audio_.sfx('hurt'); shake();
-        Particles.burst(g.bx, g.by, '#ff5c7a', 14, 2.4, 'sq');
-        g.msg = (e.kind==='orca'?'ORCA':e.kind==='squid'?'SQUID':'EEL') + ' TOOK THE LINE!'; g.msgT = 90;
-        g.flash = 16;
-        if (g.lines <= 0){ g.over = 80; Audio_.sfx('fail'); }
-        else { g.state = 'cast'; g.thrown++; g.bar = 0; g.dir = 1; }
+        Particles.burst(g.bx, this.sy(g.wy), '#ff5c7a', 16, 2.4, 'sq');
+        g.msg = (e.kind==='orca'?'ORCA':e.kind==='squid'?'SQUID':'EEL') + ' SNAPPED THE LINE!';
+        g.msgT = 95; g.flash = 16;
+        if (g.lines <= 0){ g.over = 85; Audio_.sfx('fail'); }
+        else { g.thrown++; g.state = 'cast'; g.bar = 0; g.dir = 1; }
       }
     }
     Particles.update();
   },
+  /* camera rides down with the bobber, stopping at the surface */
+  follow(){
+    const g = this.s;
+    const want = Math.max(0, g.wy - 52);
+    g.cam += (want - g.cam) * 0.16;
+    if (Math.abs(want - g.cam) < 0.3) g.cam = want;
+  },
+  /* remember where the line has been, so it trails behind the bobber */
+  recordLine(){
+    const g = this.s;
+    const bands = Math.floor(g.wy / ICE_PSTEP);
+    while (g.path.length <= bands) g.path.push(g.bx);
+  },
+  /* tension gradually pulls the slack toward a straight line to the rod */
+  relaxLine(){
+    const g = this.s;
+    if (!g.path.length) return;
+    const depth = Math.max(1, g.wy);
+    for (let i=0;i<g.path.length;i++){
+      const f = (i*ICE_PSTEP) / depth;
+      const straight = lerp(ICE_HOLE, g.bx, clamp(f,0,1));
+      g.path[i] += (straight - g.path[i]) * 0.06;
+    }
+  },
   landLine(){
     const g = this.s;
     let gained = 0;
-    g.onLine.forEach(o=> gained += ICE_FISH[o.tier].v);
-    gained = Math.round(gained * this.throwCfg().mult);
+    g.onLine.forEach(t=> gained += ICE_FISH[t].v);
+    gained = Math.round(gained * this.cfg().mult);
     g.score += gained;
     g.caught += g.onLine.length;
-    if (g.onLine.length) { g.msg = 'BANKED ' + g.onLine.length + ' FISH  (+' + gained + ')'; g.msgT = 90; Audio_.sfx('coin'); }
+    if (g.onLine.length){
+      g.msg = 'BANKED ' + g.onLine.length + ' FISH  (+' + gained + ')'; g.msgT = 100;
+      Audio_.sfx('coin');
+    }
     g.onLine = [];
-    if (g.freeCast){ g.freeCast = false; }   /* treasure did not consume a line */
-    else { g.thrown++; }
     g.banked++;
-    if (g.thrown >= 3 && g.lines <= 0){ g.over = 70; return; }
-    g.state = 'cast'; g.bar = 0; g.dir = 1;
+    if (g.freeCast) g.freeCast = false;      /* treasure did not use up a line */
+    else g.thrown++;
+    if (g.thrown >= 3){ g.over = 80; return; }
+    g.state = 'cast'; g.bar = 0; g.dir = 1; g.path = []; g.wy = 0; g.cam = 0;
   },
   done(){
     const g = this.s;
-    const top = g.legend ? 'LEGENDARY HOOKED' : '';
     finishGame({score:g.score, fish:g.score*0.5, xp:g.score/7,
-      rolls: 1 + Math.floor(g.score/900) + g.treasures, luck: g.treasures*0.06,
-      win: g.score >= 600, cleared: g.caught > 0 || g.treasures > 0,
+      rolls: 1 + Math.floor(g.score/950) + g.treasures, luck: g.treasures*0.06,
+      win: g.score >= 700, cleared: g.caught > 0 || g.treasures > 0,
       title: g.lines > 0 ? 'LINES BANKED' : 'ALL LINES LOST',
-      note: g.caught + ' FISH - ' + g.treasures + ' TREASURE' + (top?' - '+top:'')});
+      note: g.caught + ' FISH - ' + g.treasures + ' TREASURE' + (g.legend?' - LEGENDARY':'')});
   },
   draw(c){
     const g = this.s;
-    drawSky(c, g.t, {a:'#0a1130', b:'#3a5a9a', night:0.8});
-    /* ice shelf with the hole */
-    c.fillStyle = '#dff3ff'; c.fillRect(0,60,VW,14);
-    c.fillStyle = '#9dc9f0'; c.fillRect(0,74,VW,2);
-    c.fillStyle = '#04122c'; c.fillRect(104,60,32,16);
-    c.fillStyle = '#0e3566'; c.fillRect(106,60,28,14);
-    /* water, darker with depth */
-    const grd = c.createLinearGradient(0,76,0,VH);
-    grd.addColorStop(0,'#1a4a8a'); grd.addColorStop(1,'#04122c');
-    c.fillStyle = grd; c.fillRect(0,76,VW,VH-76);
-    for (let i=0;i<24;i++){
-      const y = 80 + ((i*33 + g.t*0.35) % (VH-80));
-      c.fillStyle = 'rgba(255,255,255,.07)'; c.fillRect((i*53)%VW, y, 2, 2);
+    const cam = g.cam, rich = this.richness();
+    /* water gets darker the deeper the camera has travelled */
+    const dk = clamp(cam/900, 0, 1);
+    const grd = c.createLinearGradient(0,0,0,VH);
+    grd.addColorStop(0, `rgb(${(26*(1-dk))|0},${(74*(1-dk)+8)|0},${(138*(1-dk)+22)|0})`);
+    grd.addColorStop(1, `rgb(${(4*(1-dk))|0},${(18*(1-dk))|0},${(44*(1-dk)+8)|0})`);
+    c.fillStyle = grd; c.fillRect(0,0,VW,VH);
+    /* drifting motes give the descent a sense of speed */
+    for (let i=0;i<26;i++){
+      const wy = ((i*67) % 900) + Math.floor(cam/900)*900;
+      const y = this.sy(wy + (i*13)%80);
+      if (y < -4 || y > VH) continue;
+      c.fillStyle = 'rgba(255,255,255,.10)'; c.fillRect((i*53)%VW, y, 2, 2);
     }
-    c.fillStyle = '#0a2a4a'; c.fillRect(0, ICE_BOTTOM+6, VW, VH);
-
-    /* seal at the hole */
-    drawSeal(c, 62, 46, playerLook({facing:1, frame:(g.t/26|0)%2}));
-    c.fillStyle = '#8a5a34'; c.fillRect(84,44,2,18);
+    /* depth markers every 100 */
+    for (let d=100; d<=ICE_MAXD; d+=100){
+      const y = this.sy(d);
+      if (y < 12 || y > VH-2) continue;
+      c.fillStyle = 'rgba(158,229,255,.16)'; c.fillRect(0, y, VW, 1);
+      drawText(c, d+'', 3, y-8, 'rgba(158,229,255,.45)', 1);
+    }
+    /* the surface, only in frame when the camera is near home */
+    const surfY = this.sy(0);
+    if (surfY > -20){
+      drawSky(c, g.t, {a:'#0a1130', b:'#3a5a9a', night:0.8});
+      c.fillStyle = grd; c.fillRect(0, surfY, VW, VH-surfY);
+      c.fillStyle = '#dff3ff'; c.fillRect(0, surfY-14, VW, 14);
+      c.fillStyle = '#9dc9f0'; c.fillRect(0, surfY-2, VW, 2);
+      c.fillStyle = '#04122c'; c.fillRect(ICE_HOLE-16, surfY-14, 32, 16);
+      c.fillStyle = '#0e3566'; c.fillRect(ICE_HOLE-14, surfY-14, 28, 14);
+      /* the seal at the hole with its rod */
+      drawSeal(c, 62, surfY-28, playerLook({facing:1, frame:(g.t/26|0)%2}));
+      c.fillStyle = '#8a5a34'; c.fillRect(84, surfY-30, 2, 18);
+    }
+    /* the seabed */
+    const bedY = this.sy(ICE_MAXD);
+    if (bedY < VH+10){
+      c.fillStyle = '#0a2038'; c.fillRect(0, bedY, VW, VH-bedY);
+      c.fillStyle = '#123049';
+      for (let i=0;i<16;i++) c.fillRect((i*17)%VW, bedY - ((i*7)%5), 12, 6);
+    }
 
     if (g.state !== 'cast'){
-      /* line + bobber */
-      c.fillStyle = '#c9c2a0'; c.fillRect(119, 62, 1, Math.max(0, g.by-62));
-      /* what is hanging on the line */
-      for (let i=0;i<g.onLine.length;i++){
-        const o = g.onLine[i];
-        c.fillStyle = ICE_FISH[o.tier].col;
-        c.fillRect(114 + (i%5)*3, 64 + ((i/5)|0)*4, 2, 3);
+      /* the line: rod tip, through the hole, then along the path it has traced */
+      c.fillStyle = '#d8d0a8';
+      const holeY = this.sy(0);
+      if (holeY > -10) c.fillRect(ICE_HOLE-1, Math.max(-2, holeY-30), 1, Math.min(30, holeY+2));
+      let px = ICE_HOLE, py = holeY;
+      for (let i=0;i<g.path.length;i++){
+        const wy = i*ICE_PSTEP, x = g.path[i], y = this.sy(wy);
+        if (y > -6 && y < VH+6){
+          /* join the samples so the line reads as one continuous curve */
+          const steps = Math.max(1, Math.abs(x-px)|0);
+          for (let k=0;k<=steps;k++)
+            c.fillRect((px + (x-px)*k/steps)|0, (py + (y-py)*k/steps)|0, 1, 1);
+        }
+        px = x; py = y;
       }
-      /* entities */
+      /* final span from the last sample to the bobber */
+      const by = this.sy(g.wy);
+      const steps = Math.max(1, Math.abs(g.bx-px)|0);
+      for (let k=0;k<=steps;k++)
+        c.fillRect((px + (g.bx-px)*k/steps)|0, (py + (by-py)*k/steps)|0, 1, 1);
+
+      /* things in the water */
       for (const e of g.ents){
-        const x = e.x|0, y = e.y|0;
+        const x = e.x|0, y = this.sy(e.y)|0;
+        if (y < -20 || y > VH+20) continue;
         if (e.t === 'fish'){
           const f = ICE_FISH[e.tier];
-          c.fillStyle = f.col; c.fillRect(x, y, 6+e.tier, 4);
-          c.fillStyle = f.col; c.fillRect(x + (e.dir>0?6+e.tier:-3), y+1, 3, 2);
-          c.fillStyle = '#0d1024'; c.fillRect(x + (e.dir>0?1:4+e.tier), y+1, 1, 1);
-          if (e.tier >= 4){ c.fillStyle='#ffffff'; c.fillRect(x+2, y-1, 2, 1); }
+          c.fillStyle = f.col; c.fillRect(x, y-2, 6+e.tier, 4);
+          c.fillRect(x + (e.dir>0?6+e.tier:-3), y-1, 3, 2);
+          c.fillStyle = '#0d1024'; c.fillRect(x + (e.dir>0?1:4+e.tier), y-1, 1, 1);
+          if (e.tier >= 4){ c.fillStyle='#ffffff'; c.fillRect(x+2, y-4, 2, 1); }
         } else if (e.t === 'treasure'){
-          const tr = ICE_TREASURE[e.tier];
-          const gl = (g.t/8|0)%2;
-          c.fillStyle = gl ? tr.col : '#8a5a34'; c.fillRect(x, y, 12, 9);
-          c.fillStyle = '#5e3b21'; c.fillRect(x, y+4, 12, 2); c.fillRect(x+5, y, 2, 9);
-          c.fillStyle = '#fff3b0'; c.fillRect(x+1, y+1, 3, 2);
+          const tr = ICE_TREASURE[e.tier], gl = (g.t/8|0)%2;
+          c.fillStyle = gl ? tr.col : '#8a5a34'; c.fillRect(x, y-5, 12, 9);
+          c.fillStyle = '#5e3b21'; c.fillRect(x, y-1, 12, 2); c.fillRect(x+5, y-5, 2, 9);
+          c.fillStyle = '#fff3b0'; c.fillRect(x+1, y-4, 3, 2);
+        } else if (e.kind === 'orca'){
+          c.fillStyle='#141a2e'; c.fillRect(x,y-6,28,12); c.fillRect(x+(e.dir>0?24:-4),y-3,6,6);
+          c.fillStyle='#f6fbff'; c.fillRect(x+4,y+1,14,4); c.fillRect(x+3,y-4,4,2);
+        } else if (e.kind === 'squid'){
+          c.fillStyle='#b06bff'; c.fillRect(x+2,y-6,12,8);
+          c.fillStyle='#8d4a96'; for(let k=0;k<4;k++) c.fillRect(x+2+k*3, y+2, 2, 5+((k+(g.t/6|0))%3));
+          c.fillStyle='#ffffff'; c.fillRect(x+4,y-4,2,2); c.fillRect(x+9,y-4,2,2);
         } else {
-          if (e.kind === 'orca'){
-            c.fillStyle='#141a2e'; c.fillRect(x,y,28,12); c.fillRect(x+(e.dir>0?24:-4),y+3,6,6);
-            c.fillStyle='#f6fbff'; c.fillRect(x+4,y+7,14,4); c.fillRect(x+3,y+2,4,2);
-          } else if (e.kind === 'squid'){
-            c.fillStyle='#b06bff'; c.fillRect(x+2,y,12,8);
-            c.fillStyle='#8d4a96'; for(let k=0;k<4;k++) c.fillRect(x+2+k*3, y+8, 2, 5+((k+g.t/6|0)%3));
-            c.fillStyle='#ffffff'; c.fillRect(x+4,y+2,2,2); c.fillRect(x+9,y+2,2,2);
-          } else {
-            c.fillStyle='#5a7f4a'; for(let k=0;k<6;k++) c.fillRect(x+k*4, y + Math.sin(g.t/7+k)*3, 4, 4);
-            c.fillStyle='#0d1024'; c.fillRect(x+(e.dir>0?21:1), y+1, 1, 1);
-          }
+          c.fillStyle='#5a7f4a'; for(let k=0;k<6;k++) c.fillRect(x+k*4, y-2+Math.sin(g.t/7+k)*3, 4, 4);
+          c.fillStyle='#0d1024'; c.fillRect(x+(e.dir>0?21:1), y-1, 1, 1);
         }
       }
-      /* the bobber itself */
-      const bx = g.bx|0, by = g.by|0;
-      c.fillStyle = g.hookFx>0 ? '#ffffff' : '#e05a5a'; c.fillRect(bx-3, by-4, 6, 4);
-      c.fillStyle = '#f6fbff'; c.fillRect(bx-3, by, 6, 3);
-      c.fillStyle = '#cdd8e8'; c.fillRect(bx-1, by+3, 2, 3);
-      if (!State.opt.noflash && g.hookFx>0){ c.fillStyle='rgba(255,255,255,.35)'; c.fillRect(bx-8,by-9,16,16); }
+      /* the bobber, and what is hanging under it */
+      const bx = g.bx|0, byy = this.sy(g.wy)|0;
+      c.fillStyle = g.hookFx>0 ? '#ffffff' : '#e05a5a'; c.fillRect(bx-3, byy-4, 6, 4);
+      c.fillStyle = '#f6fbff'; c.fillRect(bx-3, byy, 6, 3);
+      c.fillStyle = '#cdd8e8'; c.fillRect(bx-1, byy+3, 2, 3);
+      if (!State.opt.noflash && g.hookFx>0){ c.fillStyle='rgba(255,255,255,.35)'; c.fillRect(bx-9,byy-10,18,18); }
+      for (let i=0;i<g.onLine.length;i++){
+        const t = g.onLine[i];
+        c.fillStyle = ICE_FISH[t].col;
+        c.fillRect(bx - 6 + (i%4)*4, byy + 7 + ((i/4)|0)*4, 3, 3);
+      }
     }
     Particles.draw(c);
 
-    /* HUD */
     gameHUD(c, {left:'LINES ' + '|'.repeat(Math.max(0,g.lines)), right:fmt(g.score),
-                mid: g.state==='cast' ? 'CAST: '+this.throwCfg().n : g.depth+'M  ON LINE '+g.onLine.length+'/10',
+                mid: g.state==='cast' ? 'CAST: '+this.cfg().n : Math.round(g.wy)+'M  FISH '+g.onLine.length+'/10',
                 leftCol:'#ff9ecb'});
-    if (g.flash > 0 && !State.opt.noflash){
-      c.fillStyle = 'rgba(255,92,122,.30)'; c.fillRect(0,0,VW,VH);
-    }
+    if (g.flash > 0 && !State.opt.noflash){ c.fillStyle = 'rgba(255,92,122,.28)'; c.fillRect(0,0,VW,VH); }
+
     if (g.state === 'cast'){
-      const cfg = this.throwCfg();
+      const cfg = this.cfg();
       const bx = 24, bw = VW-48, by = 128;
-      c.fillStyle = 'rgba(9,12,30,.85)'; c.fillRect(12, 96, VW-24, 52);
-      drawTextC(c, 'CAST ' + (g.thrown+1) + ' - ' + cfg.n + ' (x' + cfg.mult.toFixed(2) + ')',
-                VW/2, 102, cfg.n==='HARD' ? '#ff5c7a' : cfg.n==='NORMAL' ? '#ffd166' : '#7bffe0', 1);
-      drawTextC(c, 'A ON THE GREEN', VW/2, 112, '#cfe0ff', 1);
+      c.fillStyle = 'rgba(9,12,30,.88)'; c.fillRect(12, 94, VW-24, 54);
+      drawTextC(c, 'CAST ' + (g.thrown+1) + ' OF 3 - ' + cfg.n + ' (x' + cfg.mult.toFixed(2) + ')',
+                VW/2, 100, cfg.n==='HARD' ? '#ff5c7a' : cfg.n==='NORMAL' ? '#ffd166' : '#7bffe0', 1);
+      drawTextC(c, 'PRESS A IN THE GREEN', VW/2, 111, '#cfe0ff', 1);
       c.fillStyle = '#0d1024'; c.fillRect(bx-2, by-2, bw+4, 16);
       c.fillStyle = '#3a2a44'; c.fillRect(bx, by, bw, 12);
       const zw = bw * cfg.zone/100;
       c.fillStyle = '#2a7a48'; c.fillRect(bx + bw/2 - zw/2, by, zw, 12);
       c.fillStyle = '#5be584'; c.fillRect(bx + bw/2 - zw*0.16, by, zw*0.32, 12);
-      const mx = bx + bw * g.bar/100;
-      c.fillStyle = '#ffd166'; c.fillRect(mx-1, by-3, 3, 18);
-    } else {
-      drawTextC(c, 'LEFT / RIGHT TO STEER THE LURE', VW/2, 150, '#9ec4e8', 1, '#04122c');
+      c.fillStyle = '#ffd166'; c.fillRect(bx + bw*g.bar/100 - 1, by-3, 3, 18);
+    } else if (g.state === 'sink'){
+      drawTextC(c, 'LEFT / RIGHT TO STEER', VW/2, 150, '#9ec4e8', 1, '#04122c');
     }
-    if (g.msgT > 0) drawTextC(c, g.msg, VW/2, 86,
-      g.msg.indexOf('TOOK')>=0 ? '#ff5c7a' : g.msg.indexOf('!')>=0 ? '#ffd166' : '#ffffff', 1, '#0d1024');
+    if (g.msgT > 0) drawTextC(c, g.msg, VW/2, 20,
+      g.msg.indexOf('SNAPPED')>=0 ? '#ff5c7a' : g.msg.indexOf('!')>=0 ? '#ffd166' : '#ffffff', 1, '#0d1024');
     if (g.over) bigMsg(c, g.lines>0 ? 'DONE' : 'LINES GONE', fmt(g.score) + ' VALUE');
   }
 });
@@ -4281,11 +4396,16 @@ Object.assign(GAMES.balance, {
     /* Where you stand sets the tilt the berg WANTS to sit at, and it springs
        toward that. Driving the angle directly (rather than its acceleration)
        is what makes leaning feel like control instead of a fight. */
-    g.px = clamp(g.px + mv*2.1, -g.w+8, g.w-8);
-    g.px = clamp(g.px + Math.sin(g.a)*0.22*grip, -g.w+8, g.w-8);
+    /* weight shifts with momentum - shuffling across the berg takes a moment,
+       so corrections have to be anticipated rather than flicked */
+    g.pv = (g.pv || 0) + mv*0.24;
+    g.pv *= 0.88;
+    g.px = clamp(g.px + g.pv, -g.w+8, g.w-8);
+    if (g.px <= -g.w+8 || g.px >= g.w-8) g.pv *= 0.3;
+    g.px = clamp(g.px + Math.sin(g.a)*0.26*grip, -g.w+8, g.w-8);
     /* landed gulls are dead weight you have to stand against */
     let gullLoad = 0;
-    for (const gu of g.gulls) if (gu.y >= 0) gullLoad += (gu.x/g.w) * 0.42;
+    for (const gu of g.gulls) if (gu.y >= 0) gullLoad += (gu.x/g.w) * 0.34;
     const target = (g.px/g.w) * 0.65 + gullLoad + Math.sin(g.t/64)*0.02;
     /* swells shove the berg, and grow through the run */
     const ramp = 1 + g.t/1900;
@@ -4298,15 +4418,19 @@ Object.assign(GAMES.balance, {
     g.av += (target - g.a) * 0.014;
     g.av *= 0.92;
     g.a = clamp(g.a + g.av, -1.2, 1.2);
-    /* gulls land more often the longer you last */
-    if (chance(0.0028 * (1 + g.t/1600)) && g.gulls.length < 5){
-      g.gulls.push({x: rnd(g.w-10,-(g.w-10)), y:-40, land:0, wob:rnd(6.28)});
+    /* Gulls land on whichever side is currently DIPPING toward the water - the low
+       side, chasing the fish. Scattering them evenly let them cancel out, so
+       standing dead centre was safe; piling onto the low side means the load
+       fights you and you have to keep shifting your weight to answer it. */
+    if (chance(0.0042 * (1 + g.t/1500)) && g.gulls.length < 3){
+      const low = g.a >= 0 ? 1 : -1;
+      g.gulls.push({x: low * rnd(g.w-9, g.w*0.32), y:-40, land:0, wob:rnd(6.28)});
       g.msg = 'GULL INBOUND'; g.msgT = 40;
     }
     for (let i=g.gulls.length-1;i>=0;i--){
       const gu = g.gulls[i];
       if (gu.y < 0){ gu.y += 1.6; }
-      else { gu.land++; if (gu.land > 300 || Math.abs(g.a) > 0.55){ g.gulls.splice(i,1); continue; } }
+      else { gu.land++; if (gu.land > 900 || Math.abs(g.a) > 0.75){ g.gulls.splice(i,1); continue; } }
     }
     if (Math.abs(g.a) > 0.82){ g.over = 60; Audio_.sfx('fail'); shake(); }
     else if (Math.abs(g.a) > 0.60 && g.t % 18 === 0){ g.msg = 'LEAN BACK!'; g.msgT = 24; }
@@ -4544,24 +4668,45 @@ Object.assign(GAMES.dive, {
       x:120, vx:0, y:44, depth:0, vy:0, t:0, o2:maxO, maxO:maxO,
       wall:[], base:0, over:0, hurt:0, phase:'down', turn:0,
       pearls:0, msg:'DIVE - B TO SINK, UP TO RISE', msgT:110,
-      best:0, scrape:0, banked:false, current:0, curT:120, glows:[]
+      best:0, scrape:0, banked:false, current:0, curT:120, glows:[],
+      orcas:[], chamber:0, chamberEnd:-99, nextChamber:26, hitFx:0
     };
     /* seed the trench profile */
     for (let i=0;i<40;i++) this.pushSeg();
   },
-  /* the cave is a centre line plus a half-width, both drifting */
+  /* the cave is a centre line plus a half-width, both drifting.
+     Every so often it blows open into a chamber patrolled by orcas. */
   pushSeg(){
     const g = this.s;
     const i = g.wall.length;
     const d = i * DIVE_SEG;                       /* depth of this sample */
     const tight = clamp(d/5200, 0, 1);
-    const half = 62 - tight*40 + Math.sin(i/7)*7 + Math.sin(i/2.7)*4;
-    const mid = 120 + Math.sin(i/9)*34 + Math.sin(i/3.3)*14 + Math.sin(i/23)*24;
-    g.wall.push({mid: clamp(mid, 40, 200), half: Math.max(15, half)});
-    /* glowing pockets to graze for oxygen, denser deeper */
-    if (i > 6 && Math.random() < 0.18 + tight*0.12)
-      g.glows.push({i:i, x: clamp(mid + rnd(half*1.2, -half*1.2), 14, VW-14), taken:0,
-                    kind: Math.random() < 0.22 + tight*0.2 ? 'pearl' : 'air'});
+    let half = 56 - tight*32 + Math.sin(i/7)*6 + Math.sin(i/2.7)*4;
+    let mid  = 120 + Math.sin(i/11)*30 + Math.sin(i/4.5)*10 + Math.sin(i/27)*22;
+    /* open water: a wide room with orcas in it */
+    if (i >= g.nextChamber && i > 14){
+      g.chamber = 16 + rndi(8);
+      g.chamberEnd = i + g.chamber;
+      g.nextChamber = g.chamberEnd + 22 + rndi(16);
+      const n = 1 + Math.min(3, Math.floor(tight*3) + (chance(0.4)?1:0));
+      for (let k=0;k<n;k++)
+        g.orcas.push({i: i + 4 + k*4 + rndi(4), x: rnd(VW-40,40), dir: chance(0.5)?1:-1,
+                      sp: 0.55 + tight*0.85 + rnd(0.3), hit:0});
+    }
+    if (i < g.chamberEnd){
+      /* ease into and out of the chamber so the mouth is findable */
+      const into = Math.min(i - (g.chamberEnd - g.chamber), g.chamberEnd - i);
+      half = Math.min(96, half + Math.min(into, 5) * 11);
+      mid = 120 + Math.sin(i/23)*10;
+    }
+    g.wall.push({mid: clamp(mid, 40, 200), half: Math.max(14, half), room: i < g.chamberEnd ? 1 : 0});
+    /* air pockets hug the walls, so oxygen has to be flown to rather than fallen into */
+    if (i > 6 && Math.random() < 0.11 + tight*0.05){
+      const side = chance(0.5) ? -1 : 1;
+      const off = half * rnd(0.95, 0.62);
+      g.glows.push({i:i, x: clamp(mid + side*off, 12, VW-12), taken:0,
+                    kind: Math.random() < 0.20 + tight*0.18 ? 'pearl' : 'air'});
+    }
   },
   sampleAt(depth){
     const g = this.s;
@@ -4624,9 +4769,28 @@ Object.assign(GAMES.dive, {
       g.x = clamp(g.x, left + 5, right - 5);
       g.vx *= -0.35;
       if (g.scrape <= 0){
-        g.scrape = 26; g.o2 -= 5; Audio_.sfx('hit'); shake();
-        Particles.burst(g.x, 46, '#ff9ecb', 6, 1.8, 'sq');
-        g.msg = 'SCRAPED THE WALL'; g.msgT = 45;
+        /* grinding the rock costs real air - hugging a wall is no longer free */
+        g.scrape = 30; g.o2 -= 9; Audio_.sfx('hit'); shake();
+        Particles.burst(g.x, 46, '#ff9ecb', 9, 2.2, 'sq');
+        g.msg = 'SCRAPED THE WALL  -9 AIR'; g.msgT = 50;
+      }
+    }
+    /* orcas patrol the chambers */
+    if (g.hitFx > 0) g.hitFx--;
+    for (const o of g.orcas){
+      const oy = 46 + (o.i*DIVE_SEG - g.depth);
+      if (oy < -60 || oy > VH+60) continue;
+      const s = this.sampleAt(o.i*DIVE_SEG);
+      o.x += o.dir * o.sp;
+      if (o.x < s.mid - s.half + 16){ o.x = s.mid - s.half + 16; o.dir = 1; }
+      if (o.x > s.mid + s.half - 16){ o.x = s.mid + s.half - 16; o.dir = -1; }
+      if (o.hit > 0){ o.hit--; continue; }
+      if (Math.abs(o.x - g.x) < 17 && Math.abs(oy - 46) < 11){
+        o.hit = 90; g.hitFx = 20; g.o2 -= 22;
+        g.vx = (g.x < o.x ? -1 : 1) * 3.4;
+        Audio_.sfx('hurt'); shake();
+        Particles.burst(g.x, 46, '#ff5c7a', 16, 2.6, 'sq');
+        g.msg = 'ORCA!  -22 AIR'; g.msgT = 70;
       }
     }
     /* pickups: only reachable by flying close to them */
@@ -4638,7 +4802,7 @@ Object.assign(GAMES.dive, {
         p.taken = 1;
         if (p.kind === 'pearl'){ g.pearls++; Audio_.sfx('perfect');
           Particles.burst(p.x, py, '#ffd166', 12, 2.2, 'star'); g.msg = 'DEEP PEARL!'; g.msgT = 60; }
-        else { g.o2 = Math.min(g.maxO, g.o2 + 15); Audio_.sfx('bubble');
+        else { g.o2 = Math.min(g.maxO, g.o2 + 11); Audio_.sfx('bubble');
           Particles.burst(p.x, py, '#9ee5ff', 6, 1.4, 'ring'); }
       }
     }
@@ -4692,6 +4856,19 @@ Object.assign(GAMES.dive, {
         c.fillRect(p.x-3, py-4, 6, 1); c.fillRect(p.x-4, py-3, 8, 6); c.fillRect(p.x-3, py+3, 6, 1);
         c.fillStyle = '#ffffff'; c.fillRect(p.x-2, py-2, 2, 2);
       }
+    }
+    /* orcas in the chambers */
+    for (const o of g.orcas){
+      const oy = 46 + (o.i*DIVE_SEG - g.depth);
+      if (oy < -24 || oy > VH+24) continue;
+      const x = o.x|0, y = oy|0, f = o.hit > 0 && (g.t/4|0)%2;
+      c.fillStyle = f ? '#ffffff' : '#101728'; c.fillRect(x-15,y-6,30,13);
+      c.fillRect(x + (o.dir>0 ? 13 : -19), y-2, 6, 7);
+      c.fillRect(x-4, y-11, 7, 6);
+      c.fillStyle = f ? '#ffffff' : '#f6fbff';
+      c.fillRect(x-11, y+2, 16, 5);
+      c.fillRect(x + (o.dir>0 ? 6 : -10), y-4, 4, 2);
+      c.fillStyle = '#ff5c7a'; c.fillRect(x + (o.dir>0 ? 10 : -12), y-1, 3, 2);
     }
     Particles.draw(c);
     /* the seal, nose down or nose up */
