@@ -6,6 +6,13 @@
 <meta name="theme-color" content="#0b1026">
 <meta name="description" content="Seal Vault - a single-file offline pixel-art seal arcade with 11 minigames, loot vaults and 200+ cosmetics.">
 <title>SEAL VAULT</title>
+<!-- home-screen app support. On iOS these turn the shortcut into a standalone
+     web app, which gets its own storage timer instead of Safari's 7-day one. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Seal Vault">
+<link rel="apple-touch-icon" href="data:image/png;base64,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">
 <style>
 /* ============================================================
    SEAL VAULT - single file retro game
@@ -1223,7 +1230,7 @@ const TRIMS = [null,'#cdd8e8','#7be08a','#4fd6ff','#b06bff','#ffd166'];
 function defaultState(){
   const owned = {}; STARTER_ITEMS.forEach(id=> owned[id] = 1);
   return {
-    v:1, created:Date.now(), savedAt:0,
+    v:1, created:Date.now(), savedAt:0, flags:{hsPrompted:0},
     fish:0, pearls:0, xp:0, level:1, prestige:0, lifetimeFish:0,
     gear:{blubber:0,speed:0,luck:0,magnet:0,lungs:0,grip:0},
     owned:owned,
@@ -1281,6 +1288,46 @@ async function idbSet(k, v){
     });
   } catch(e){ return null; }
 }
+/* ---- home-screen app -------------------------------------------------
+   Added to the home screen on iOS, the game runs outside Safari and gets
+   its own storage timer, instead of Safari's 7-days-of-browsing one. That
+   is the only reliable way to stop iPhone saves being evicted.        */
+const Install = {
+  prompt:null,
+  standalone(){
+    return window.navigator.standalone === true ||
+           (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  },
+  ios(){
+    const ua = navigator.userAgent;
+    return /iPad|iPhone|iPod/.test(ua) ||
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  },
+  android(){ return /Android/.test(navigator.userAgent); },
+  mobile(){ return this.ios() || this.android(); },
+  /* one gentle nudge, once, and only once there is progress worth losing */
+  maybeNudge(){
+    if (this.standalone() || !this.ios()) return;
+    if (State.flags.hsPrompted) return;
+    if (State.lifetimeFish < 400) return;
+    State.flags.hsPrompted = 1; saveGame();
+    modal('Keep your progress safe',
+      'Safari clears saved data for sites you have not opened in about a week - it would wipe your seal.<br><br>' +
+      'Adding Seal Vault to your Home Screen fixes it. The game then runs as its own app and keeps its save.<br><br>' +
+      '<b>Share button</b> at the bottom of Safari, then <b>Add to Home Screen</b>.',
+      [{t:'GOT IT'},{t:'REMIND ME IN SYS', fn:()=>UI.open('scr-settings')}]);
+  }
+};
+addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); Install.prompt = e; });
+/* reuse the inlined app icon as the tab favicon rather than shipping it twice */
+(function(){
+  const t = document.querySelector('link[rel="apple-touch-icon"]');
+  if (!t) return;
+  const i = document.createElement('link');
+  i.rel = 'icon'; i.type = 'image/png'; i.href = t.href;
+  document.head.appendChild(i);
+})();
+
 const FileSave = {
   handle:null, name:'', status: FS_OK ? 'off' : 'unsupported',
   pending:false, lastWrite:0, timer:null,
@@ -2118,6 +2165,34 @@ const UI = {
     acc.appendChild(el('div','tagline','RARITY IS SHOWN BY SHAPE AND TEXT AS WELL AS COLOUR.'));
     b.appendChild(acc);
 
+    /* ---- home screen app ---- */
+    const home = el('div','card');
+    if (Install.standalone()){
+      home.innerHTML = '<h3>Home Screen App <span class="done">ON</span></h3>' +
+        '<div class="muted">Running as its own app. Your save is no longer on Safari\'s 7-day cleanup clock.</div>';
+    } else if (Install.ios()){
+      home.innerHTML = '<h3>Home Screen App</h3>' +
+        '<div class="muted">Safari deletes saved data for sites you have not opened in about a week. Adding the game to your ' +
+        'Home Screen runs it as its own app, which keeps its save instead.</div>' +
+        '<ul class="plain"><li>Tap the <b>Share</b> button in Safari\'s toolbar</li>' +
+        '<li>Scroll and tap <b>Add to Home Screen</b></li><li>Tap <b>Add</b></li></ul>' +
+        '<div class="tagline">EXPORT YOUR SAVE FIRST, THEN IMPORT IT IN THE NEW APP - THEY START WITH SEPARATE STORAGE.</div>';
+    } else if (Install.android()){
+      home.innerHTML = '<h3>Home Screen App</h3>' +
+        '<div class="muted">Chrome menu (three dots), then <b>Add to Home screen</b>. Android does not evict storage the way ' +
+        'Safari does, so this is for convenience rather than save safety.</div>';
+      if (Install.prompt){
+        const ib = el('button','iconbtn','INSTALL');
+        ib.onclick = async ()=>{ Install.prompt.prompt(); Install.prompt = null; this.renderSettings(); };
+        home.appendChild(ib);
+      }
+    } else {
+      home.innerHTML = '<h3>Home Screen App</h3>' +
+        '<div class="muted">Desktop browsers do not evict game saves on a timer, so there is nothing to do here. ' +
+        'On a phone this menu explains how to keep saves safe.</div>';
+    }
+    b.appendChild(home);
+
     /* ---- linked save file ---- */
     const link = el('div','card');
     const fs = FileSave;
@@ -2688,6 +2763,7 @@ function startGame(key){
 }
 function finishGame(o){
   const key = Runner.key;
+  setTimeout(()=>{ if (!UI.anyOpen()) Install.maybeNudge(); }, 900);
   const fishMult = prestigeMult() * eventFishMult();
   const fish = Math.round((o.fish||0) * fishMult);
   const xp   = Math.round((o.xp||0) * eventXpMult());
@@ -4288,8 +4364,8 @@ window.SV = {State:()=>State, COS:COS, GAMES:GAMES, start:startGame, scene:()=>S
   finish:(o)=>finishGame(o||{score:1,fish:10,xp:5,rolls:1}), rollLoot:rollLoot, save:saveGame,
   grant:(id)=>grantItem(id), quests:QUESTS, hub:Hub, runner:Runner, audio:Audio_, input:Input,
   sealCanvas:sealCanvas, thumb:itemThumbCanvas, CANW:CANW, CANH:CANH, PADX:PADX, PADY:PADY,
-  fileSave:FileSave, importText:importSaveText, load:loadGame,
-  version:'1.1.0'};
+  fileSave:FileSave, importText:importSaveText, load:loadGame, install:Install,
+  version:'1.2.0'};
 boot();
 
 })();
