@@ -61,6 +61,18 @@ Progress is written to `localStorage` for this browser automatically. `SYS → E
 downloads a `.json` backup; `IMPORT FILE` or `PASTE SAVE` restores it on any device.
 Damaged or hand-edited saves are sanitised on load rather than crashing the game.
 
+### Home screen app (iPhone — important)
+
+Safari deletes a site's saved data after roughly seven days of *browser* use without
+revisiting, which will wipe your seal. Adding the game to your Home Screen runs it as a
+standalone web app with its own storage timer, which resets each time you play — so saves
+survive. `SYS → HOME SCREEN APP` walks through it, and the game nudges you once, after you
+have progress worth keeping.
+
+The app icon is baked into the file as a base64 PNG, drawn by the game's own seal renderer.
+Export your save before adding the shortcut and import it afterwards: the browser tab and
+the home screen app start with separate storage.
+
 ### Auto-save file (Chrome / Edge on desktop)
 
 `SYS → LINK A SAVE FILE` lets you pick a `.json` once. After that the game writes every
