@@ -851,6 +851,10 @@ const EXCLUSIVES = [
    c:['#7bffe0','#b06bff'], hint:'Finish Aurora Watch 5 times with a flawless run'},
   {id:'head_fisherman',  slot:'head',  fam:'fisherman',   name:"Fisherman's Hat (Legacy)", q:'fisherman',
    c:['#c9a86a','#7a5a34'], hint:"Complete Old Marlin's quest chain"},
+  {id:'trail_lumina',    slot:'trail', fam:'lumina',      name:'Lumina Wake', q:'lumina',
+   c:['#b6ffe9','#7bffe0'], hint:'Catch the Lumina Fish in Fish Dash'},
+  {id:'head_gildedplume',slot:'head',  fam:'gildedplume', name:'Gilded Plume', q:'gilded',
+   c:['#ffd166','#fff3b0'], hint:'Swat the Radiant Gull in Seagull Chase'},
   {id:'badge_founder',   slot:'badge', fam:'founder',     name:"Founder's Tag", q:'founder',
    c:['#ffd166'], hint:'Complete your first full prestige cycle'},
   {id:'emote_founder',   slot:'emote', fam:'founder',     name:"Founder's Salute", q:'founder',
@@ -963,6 +967,9 @@ const HEAD_DRAW = {
   headphones(R,a,b){ R(11,-4,12,2,a);R(9,-3,3,6,a);R(22,-3,3,6,a);R(10,-2,1,4,b);R(23,-2,1,4,b);R(14,-5,6,1,b); },
   auroracrown(R,a,b){ R(11,-2,12,2,a);R(12,-5,2,3,b);R(15,-8,2,6,b);R(19,-6,2,4,b);R(22,-4,1,2,b);
     R(16,-10,1,2,a);R(13,-6,1,1,a);R(20,-7,1,1,a);R(11,-3,12,1,b); },
+  gildedplume(R,a,b){ R(12,-2,10,3,a);R(12,-3,10,1,b);
+    R(15,-9,2,7,a);R(13,-7,2,4,b);R(17,-8,2,5,b);R(14,-10,4,2,b);R(16,-11,1,1,a);
+    R(20,-6,2,4,a);R(21,-8,1,3,b); },
   fisherman(R,a,b){ R(12,-4,9,4,a);R(9,0,16,2,b);R(9,-1,16,1,a);
     R(14,-5,2,1,b);R(19,-2,1,1,'#5be584');R(20,-3,1,1,'#ffd166');R(11,0,1,3,'#cdd8e8'); }
 };
@@ -1048,7 +1055,8 @@ const TRAIL_CFG = {
   note:{n:1,life:44,sz:2,vy:-.12,shape:'note'},     shard:{n:2,life:30,sz:2,vy:.06,shape:'tri'},
   aurora:{n:3,life:46,sz:2,vy:-.06,shape:'sq',rain:2}, leaf:{n:1,life:40,sz:1,vy:.05,shape:'sq'},
   coin:{n:1,life:30,sz:1,vy:-.08,shape:'sq'},       void:{n:2,life:36,sz:2,vy:-.05,shape:'dot'},
-  goldflip:{n:3,life:34,sz:2,vy:-.06,shape:'star'}, ghost:{n:2,life:52,sz:3,vy:-.08,shape:'ghost'}
+  goldflip:{n:3,life:34,sz:2,vy:-.06,shape:'star'}, ghost:{n:2,life:52,sz:3,vy:-.08,shape:'ghost'},
+  lumina:{n:3,life:48,sz:2,vy:-.04,shape:'ring'}
 };
 
 /* ---- assemble one seal sprite ---- */
@@ -1230,7 +1238,7 @@ const TRIMS = [null,'#cdd8e8','#7be08a','#4fd6ff','#b06bff','#ffd166'];
 function defaultState(){
   const owned = {}; STARTER_ITEMS.forEach(id=> owned[id] = 1);
   return {
-    v:1, created:Date.now(), savedAt:0, flags:{hsPrompted:0},
+    v:1, created:Date.now(), savedAt:0, flags:{hsPrompted:0, welcomed:0},
     fish:0, pearls:0, xp:0, level:1, prestige:0, lifetimeFish:0,
     gear:{blubber:0,speed:0,luck:0,magnet:0,lungs:0,grip:0},
     owned:owned,
@@ -1238,6 +1246,7 @@ function defaultState(){
               emote:'emote_friendlywave', badge:'badge_fishtag'},
     pity:{epic:0, legend:0, mythic:0, rolls:0},
     stats:{plays:{}, best:{}, wins:{}, totalRolls:0, deepest:0, flawlessAurora:0, noHitWaves:0,
+           lumina:0, gilded:0,
            legendaryCatch:0, gamesCleared:{}, rarityGot:[0,0,0,0,0,0,0]},
     quests:{fisherman:0, lureHeld:0, claimed:{}},
     rotation:{day:0, list:[], rerolls:0},
@@ -1305,17 +1314,18 @@ const Install = {
   },
   android(){ return /Android/.test(navigator.userAgent); },
   mobile(){ return this.ios() || this.android(); },
-  /* one gentle nudge, once, and only once there is progress worth losing */
+  /* asked once when the game opens on iOS, and never again if declined */
   maybeNudge(){
-    if (this.standalone() || !this.ios()) return;
-    if (State.flags.hsPrompted) return;
-    if (State.lifetimeFish < 400) return;
-    State.flags.hsPrompted = 1; saveGame();
-    modal('Keep your progress safe',
-      'Safari clears saved data for sites you have not opened in about a week - it would wipe your seal.<br><br>' +
-      'Adding Seal Vault to your Home Screen fixes it. The game then runs as its own app and keeps its save.<br><br>' +
-      '<b>Share button</b> at the bottom of Safari, then <b>Add to Home Screen</b>.',
-      [{t:'GOT IT'},{t:'REMIND ME IN SYS', fn:()=>UI.open('scr-settings')}]);
+    if (this.standalone() || !this.ios()) return false;
+    if (State.flags.hsPrompted) return false;
+    modal('Add Seal Vault to your Home Screen?',
+      'Safari deletes saved data for sites you have not opened in about a week, which would wipe your seal. ' +
+      'Added to the Home Screen the game runs as its own app and keeps its save.<br><br>' +
+      '<span class="muted">Your choice - you can play in the browser and this will not ask again. ' +
+      'SYS has the steps whenever you want them.</span>',
+      [{t:'SHOW ME HOW', fn:()=>{ State.flags.hsPrompted = 1; saveGame(); UI.open('scr-settings'); }},
+       {t:'NO THANKS',   fn:()=>{ State.flags.hsPrompted = 1; saveGame(); toast('YOU CAN ADD IT LATER IN SYS'); }}]);
+    return true;
   }
 };
 addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); Install.prompt = e; });
@@ -1471,9 +1481,12 @@ function sanitize(s){
   GEAR.forEach(g=> s.gear[g.k] = num(s.gear[g.k], 0, g.max, 0));
   ['epic','legend','mythic','rolls'].forEach(k=> s.pity[k] = num(s.pity[k], 0, 1e6, 0));
   s.quests.fisherman = num(s.quests.fisherman, 0, 4, 0);
+  s.flags.hsPrompted = num(s.flags.hsPrompted, 0, 1, 0);
+  s.flags.welcomed   = num(s.flags.welcomed, 0, 1, 0);
   s.quests.lureHeld  = num(s.quests.lureHeld, 0, 2, 0);
   const st = s.stats;
-  ['totalRolls','deepest','flawlessAurora','noHitWaves','legendaryCatch'].forEach(k=> st[k] = num(st[k], 0, 1e9, 0));
+  ['totalRolls','deepest','flawlessAurora','noHitWaves','legendaryCatch','lumina','gilded']
+    .forEach(k=> st[k] = num(st[k], 0, 1e9, 0));
   if (!Array.isArray(st.rarityGot) || st.rarityGot.length !== 7) st.rarityGot = [0,0,0,0,0,0,0];
   st.rarityGot = st.rarityGot.map(v=> num(v, 0, 1e9, 0));
   ['plays','best','wins','gamesCleared'].forEach(k=>{
@@ -1637,6 +1650,10 @@ const QUESTS = [
    prog:()=> [Math.min(State.stats.deepest,900), 900]},
   {k:'auroracrown', item:'head_auroracrown', n:'Aurora Crown',     d:'Finish Aurora Watch flawlessly 5 times.',
    prog:()=> [Math.min(State.stats.flawlessAurora,5), 5]},
+  {k:'lumina',      item:'trail_lumina',     n:'Lumina Fish',      d:'Catch the Lumina Fish - a very rare glowing fish in Fish Dash.',
+   prog:()=> [Math.min(State.stats.lumina||0,1), 1]},
+  {k:'gilded',      item:'head_gildedplume', n:'Radiant Gull',     d:'Swat the Radiant Gull - a very rare glowing gull in Seagull Chase.',
+   prog:()=> [Math.min(State.stats.gilded||0,1), 1]},
   {k:'shellback',   item:'fur_shellback',    n:'Shellback',        d:'Collect at least one item of every rarity tier.',
    prog:()=> [State.stats.rarityGot.slice(0,6).filter(v=>v>0).length, 6]},
   {k:'oldwhiskers', item:'fur_oldwhiskers',  n:'Old Whiskers',     d:'Reach maximum prestige (' + MAX_PRESTIGE + ').',
@@ -1869,7 +1886,11 @@ const UI = {
       $('#pvEquip').textContent = owned ? (State.equipped[it.slot]===id ? 'UNEQUIP' : 'EQUIP') : 'LOCKED';
       $('#pvEquip').disabled = !owned;
     } else {
-      box.innerHTML = '<div class="t">'+State.name+'</div><div class="muted">PICK AN ITEM</div>';
+      box.innerHTML = '<div class="t">'+State.name+' <button class="iconbtn" id="pvRename" '+
+        'style="padding:0 5px;font-size:calc(10px * var(--fs))">RENAME</button></div>'+
+        '<div class="muted">PICK AN ITEM</div>';
+      const rn = box.querySelector('#pvRename');
+      if (rn) rn.onclick = ()=> renameSeal(()=> this.renderPreview());
       $('#pvhint').textContent = ''; $('#pvEquip').disabled = true; $('#pvEquip').textContent = 'EQUIP';
     }
     const parts = SLOTS.map(s=>{ const e = State.equipped[s.k]; return s.n.toUpperCase()+': '+(e&&COS.byId[e]?COS.byId[e].name:'-'); });
@@ -2251,14 +2272,7 @@ const UI = {
     save.appendChild(row);
     save.appendChild(el('div','tagline','SEAL: '+State.name+'   ITEMS: '+ownedCount()+'/'+COS.all.length+'   ROLLS: '+State.stats.totalRolls));
     const ren = el('button','iconbtn','RENAME SEAL');
-    ren.onclick = ()=>{
-      const box = modal('Name your seal','<input id="nmbox" maxlength="8" value="'+State.name+'" style="width:100%;background:#0a1130;color:var(--ink);border:2px solid var(--line);border-radius:6px;padding:6px">',
-        [{t:'SAVE', keep:true},{t:'CANCEL'}]);
-      box.querySelector('.row button').onclick = ()=>{
-        const v = (box.querySelector('#nmbox').value||'').replace(/[^A-Za-z0-9 ]/g,'').trim().toUpperCase().slice(0,8);
-        if (v) State.name = v; closeModal(); saveGame(); this.renderSettings();
-      };
-    };
+    ren.onclick = ()=> renameSeal(()=> this.renderSettings());
     save.appendChild(ren);
     b.appendChild(save);
     const about = el('div','card');
@@ -2316,12 +2330,12 @@ $('#importFile').onchange = e=>{
    ============================================================ */
 const GAMES = {
   dash:    {n:'Fish Dash',        d:'Endless swim. Dodge nets, rocks and orcas, eat everything else.',      music:'action', tip:'MOVE TO DODGE - B FOR A DASH'},
-  ice:     {n:'Ice Fishing',      d:'Tap-timing hook. Push your luck for rarer catches.',                   music:'calm',   tip:'A ON THE GREEN - B TO BANK'},
-  floe:    {n:'Floe Survival',    d:'Wave arena. Auto-slap anything close. Boss every 10 waves.',           music:'action', tip:'MOVE TO DODGE - AUTO ATTACK'},
+  ice:     {n:'Ice Fishing',      d:'Time the cast, then steer the lure deep. Ten fish reels the line in.',  music:'calm',   tip:'A TO CAST - LEFT/RIGHT TO STEER'},
+  floe:    {n:'Floe Survival',    d:'Wave arena. Auto-slap anything close. Boss every 10 waves.',           music:'action', tip:'DRAG TO STEER - AUTO ATTACK'},
   pearl:   {n:'Pearl Match',      d:'Match-3 bonus room. Pure loot, no danger.',                            music:'calm',   tip:'MOVE CURSOR - A TO SWAP'},
   slide:   {n:'Belly Slide Race', d:'Rhythm slide down the ice. Jump gaps, trick off ramps.',               music:'action', tip:'A JUMP - B TRICK IN AIR'},
   dig:     {n:'Clam Dig',         d:'Timing digs on the beach. Clams, crabs and empty shells.',             music:'calm',   tip:'MOVE - A TO DIG ON GREEN'},
-  sync:    {n:'Synchronized Swim',d:'Rhythm routine. Hit the arrows on the line.',                          music:'calm',   tip:'PRESS THE ARROW SHOWN'},
+  sync:    {n:'Synchronized Swim',d:'Endless rhythm routine. It speeds up. Ten misses and the crowd goes home.', music:'calm', tip:'PRESS THE ARROW - OR TAP ITS LANE'},
   balance: {n:'Iceberg Balance',  d:'Keep a rocking, shrinking iceberg level.',                             music:'calm',   tip:'LEAN LEFT AND RIGHT'},
   gull:    {n:'Seagull Chase',    d:'Swat gulls before they carry off your fish stash.',                    music:'action', tip:'MOVE REticle - A TO SWAT'},
   dive:    {n:'Deep Dive',        d:'Descend on one breath. Jellyfish sting, bubbles refill.',              music:'action', tip:'STEER - B TO SINK FAST'},
@@ -2763,7 +2777,6 @@ function startGame(key){
 }
 function finishGame(o){
   const key = Runner.key;
-  setTimeout(()=>{ if (!UI.anyOpen()) Install.maybeNudge(); }, 900);
   const fishMult = prestigeMult() * eventFishMult();
   const fish = Math.round((o.fish||0) * fishMult);
   const xp   = Math.round((o.xp||0) * eventXpMult());
@@ -2884,13 +2897,47 @@ function bigMsg(c, s, sub, y){
   drawTextC(c, s, VW/2, y, '#ffffff', 2, '#0d1024');
   if (sub) drawTextC(c, sub, VW/2, y+16, '#9ee5ff', 1);
 }
-function pointerSteer(px, py, spd){
-  /* drag anywhere on the canvas to steer - used by the free-swim games */
-  if (!Input.ptr.down) return null;
-  const dx = Input.ptr.x - px, dy = Input.ptr.y - py, d = Math.hypot(dx,dy);
-  if (d < 3) return {x:0,y:0};
-  return {x: dx/d, y: dy/d};
-}
+/* ---- floating analog stick -------------------------------------------
+   Touch anywhere on the canvas and the stick appears under your thumb;
+   drag to steer in any direction, including diagonals. Falls back to the
+   d-pad and keyboard, which stay fully usable.                        */
+const Stick = {
+  active:false, ox:0, oy:0, x:0, y:0, mag:0, R:20,
+  reset(){ this.active = false; this.mag = 0; this.x = this.y = 0; },
+  poll(){
+    if (Input.ptr.down){
+      if (!this.active){ this.active = true; this.ox = Input.ptr.x; this.oy = Input.ptr.y; }
+      let dx = Input.ptr.x - this.ox, dy = Input.ptr.y - this.oy;
+      const d = Math.hypot(dx, dy);
+      if (d > this.R){                       /* drag the base along past full deflection */
+        this.ox += dx * (1 - this.R/d); this.oy += dy * (1 - this.R/d);
+        dx *= this.R/d; dy *= this.R/d;
+      }
+      this.mag = Math.min(1, d / this.R);
+      if (d > 0.001){ this.x = dx/Math.max(d, this.R*this.mag||1); this.y = dy/Math.max(d, this.R*this.mag||1); }
+      const n = Math.hypot(dx, dy) || 1;
+      this.x = dx/n * this.mag; this.y = dy/n * this.mag;
+      if (this.mag < 0.16){ this.x = this.y = 0; this.mag = 0; }
+    } else this.reset();
+  },
+  /* returns a normalised direction with magnitude, or null when idle */
+  read(){
+    this.poll();
+    return (this.active && this.mag > 0) ? {x:this.x, y:this.y, mag:this.mag} : null;
+  },
+  draw(c){
+    if (!this.active) return;
+    const ox = this.ox|0, oy = this.oy|0;
+    c.globalAlpha = 0.32; c.fillStyle = '#9ee5ff';
+    for (let a=0;a<16;a++){
+      const px = ox + Math.cos(a*Math.PI/8)*this.R, py = oy + Math.sin(a*Math.PI/8)*this.R;
+      c.fillRect(px|0, py|0, 2, 2);
+    }
+    c.globalAlpha = 0.75; c.fillStyle = '#ffffff';
+    c.fillRect((ox + this.x*this.R - 3)|0, (oy + this.y*this.R - 3)|0, 6, 6);
+    c.globalAlpha = 1;
+  }
+};
 function quitCheck(){
   if (Input.hit('esc')){
     modal('Leave the vault?', 'Your run ends with no reward.', [
@@ -2909,7 +2956,8 @@ Object.assign(GAMES.dash, {
   start(){
     const g = this.s = {
       x:40, y:80, vy:0, hp:3+State.gear.blubber, maxhp:3+State.gear.blubber, t:0, dist:0,
-      spd:1.5, ents:[], fish:0, gold:0, inv:0, dash:0, dashCd:0, over:0, spawn:0, bub:[]
+      spd:1.5, ents:[], fish:0, gold:0, inv:0, dash:0, dashCd:0, over:0, spawn:0, bub:[],
+      smash:0, score2:0, lumina:0, luminaSeen:0, msg:'', msgT:0
     };
     for (let i=0;i<24;i++) g.bub.push({x:rnd(VW), y:rnd(VH), s:rnd(2,1)|0, v:rnd(.5,.15)});
   },
@@ -2918,17 +2966,35 @@ Object.assign(GAMES.dash, {
     if (quitCheck()) return;
     g.t++;
     if (g.over){ if (--g.over <= 0) this.done(); Particles.update(); return; }
-    g.spd = 1.5 + g.dist/2600;
+    /* dashing surges the whole world past you, not just your own speed */
+    g.spd = 1.5 + g.dist/2600 + (g.dash > 0 ? 4.2 : 0);
     g.dist += g.spd;
-    const sp = 1.55 + State.gear.speed*0.06 + (g.dash>0?1.6:0);
+    const sp = 1.55 + State.gear.speed*0.06 + (g.dash>0?1.1:0);
     let mx = 0, my = 0;
     if (Input.key('left')) mx -= 1; if (Input.key('right')) mx += 1;
     if (Input.key('up')) my -= 1; if (Input.key('down')) my += 1;
-    const ps = pointerSteer(g.x+12, g.y+7);
-    if (ps){ mx = ps.x; my = ps.y; }
+    const st = Stick.read(g.x+12, g.y+7);
+    if (st){ mx = st.x; my = st.y; }
     g.x = clamp(g.x + mx*sp, 6, 150); g.y = clamp(g.y + my*sp, 22, 142);
-    if (Input.hit('b') && g.dashCd <= 0){ g.dash = 16; g.dashCd = 80; Audio_.sfx('splash'); }
-    if (g.dash > 0) g.dash--; if (g.dashCd > 0) g.dashCd--;
+    if (Input.hit('b') && g.dashCd <= 0){
+      g.dash = 22; g.dashCd = 95; Audio_.sfx('splash'); shake();
+      Particles.burst(g.x+4, g.y+7, '#9ee5ff', 10, 2.6, 'ring');
+    }
+    if (g.dash > 0){
+      g.dash--;
+      /* smash through anything solid you touch while dashing */
+      for (let i=g.ents.length-1;i>=0;i--){
+        const e = g.ents[i];
+        if (e.t === 'fish' || e.t === 'gfish' || e.t === 'lumina') continue;
+        if (aabb({x:g.x, y:g.y+1, w:24, h:13}, {x:e.x, y:e.t==='net'? g.y : e.y, w:e.w, h:e.t==='net'? 13 : e.h})){
+          if (e.t === 'net' && Math.abs(g.y+7 - e.y) < 16) continue;   /* already through the gap */
+          g.ents.splice(i,1); g.smash++; g.score2 += 25;
+          Audio_.sfx('hit'); Particles.burst(e.x+6, e.y+6, '#ffd166', 9, 2.4, 'sq');
+        }
+      }
+      if (g.t % 2 === 0) Particles.burst(g.x+2, g.y+7, '#bfe9ff', 1, 0.6, 'ring');
+    }
+    if (g.dashCd > 0) g.dashCd--;
     if (g.inv > 0) g.inv--;
     if (State.equipped.trail && g.t%2===0) Particles.spawnTrail(State.equipped.trail, g.x+2, g.y+8, -2, 0);
     /* spawns */
@@ -2942,6 +3008,12 @@ Object.assign(GAMES.dash, {
       else if (r < 0.82){ const gap = rnd(122,38); g.ents.push({t:'net', x:VW+10, y:gap, w:10, h:0}); }
       else { g.ents.push({t:'orca', x:VW+20, y:rnd(120,30), w:30,h:14, a:rnd(6.28), sp:rnd(1.4,.7)}); }
       if (chance(0.25)) for (let i=0;i<3;i++) g.ents.push({t:'fish', x:VW+8+i*10, y:rnd(130,30), w:8,h:6, a:rnd(6.28)});
+      /* the Lumina Fish: about 1 spawn in 420, and only once per run */
+      if (!g.luminaSeen && g.dist > 300 && chance(1/420)){
+        g.luminaSeen = 1;
+        g.ents.push({t:'lumina', x:VW+14, y:rnd(120,34), w:12, h:9, a:rnd(6.28)});
+        g.msg = 'SOMETHING IS GLOWING...'; g.msgT = 130; Audio_.sfx('perfect');
+      }
     }
     /* entities */
     const pbox = {x:g.x+4, y:g.y+3, w:16, h:9};
@@ -2950,9 +3022,25 @@ Object.assign(GAMES.dash, {
       e.x -= g.spd + (e.t==='orca'? e.sp : 0);
       if (e.t === 'fish' || e.t === 'gfish') e.y += Math.sin(g.t/18 + e.a)*0.5;
       if (e.t === 'orca') e.y += Math.sin(g.t/26 + e.a)*0.8;
+      if (e.t === 'lumina'){
+        /* darts about and drifts away from you - it does not want to be caught */
+        e.y += Math.sin(g.t/11 + e.a)*1.4;
+        e.x += Math.cos(g.t/17 + e.a)*0.5 + 0.35;
+        e.y = clamp(e.y, 24, 138);
+        if (g.t % 2 === 0) Particles.burst(e.x+5, e.y+4, chance(0.5)?'#b6ffe9':'#7bffe0', 1, 0.5, 'ring');
+      }
       if (e.x < -40){ g.ents.splice(i,1); continue; }
       const mag = 3 + State.gear.magnet*3;
-      if (e.t === 'fish' || e.t === 'gfish'){
+      if (e.t === 'lumina'){
+        if (dist(e.x+5, e.y+4, g.x+12, g.y+7) < 14){
+          g.ents.splice(i,1); g.lumina++;
+          Particles.burst(e.x, e.y, '#7bffe0', 26, 3, 'star'); Audio_.sfx('legend'); shake();
+          if (g.hp < g.maxhp){ g.hp++; g.msg = 'LUMINA FISH! LIFE RESTORED'; }
+          else g.msg = 'LUMINA FISH!';
+          g.msgT = 150;
+          continue;
+        }
+      } else if (e.t === 'fish' || e.t === 'gfish'){
         const d = dist(e.x, e.y, g.x+12, g.y+7);
         if (d < 26 + mag){ e.x += (g.x+12-e.x)*0.12; e.y += (g.y+7-e.y)*0.12; }
         if (d < 12){
@@ -2979,10 +3067,18 @@ Object.assign(GAMES.dash, {
   done(){
     const g = this.s;
     const m = Math.floor(g.dist/8);
-    const score = m + g.fish*6 + g.gold*25;
-    finishGame({score:score, fish: m*0.55 + g.fish*3 + g.gold*14, xp: m/7 + g.fish, rolls: 1 + Math.floor(m/380) + (g.gold>=3?1:0),
-      luck: g.gold*0.02, win: m >= 500, title: m>=500?'STRONG SWIM':'RUN COMPLETE',
-      note: m + 'M  -  ' + g.fish + ' FISH  -  ' + g.gold + ' GOLDEN'});
+    let bonusFish = 0, note = m + 'M - ' + g.fish + ' FISH', title = m>=500?'STRONG SWIM':'RUN COMPLETE';
+    if (g.lumina){
+      const first = !State.owned['trail_lumina'];
+      State.stats.lumina = (State.stats.lumina||0) + 1;
+      if (!first) bonusFish = 900;                 /* already have the cosmetic - pay out instead */
+      note = first ? 'LUMINA FISH CAUGHT!' : 'LUMINA FISH - BONUS FISH!';
+      title = 'LUMINA CATCH';
+    }
+    const score = m + g.fish*6 + g.gold*25 + g.score2 + (g.lumina?1000:0);
+    finishGame({score:score, fish: m*0.55 + g.fish*3 + g.gold*14 + g.smash*6 + bonusFish,
+      xp: m/7 + g.fish + (g.lumina?60:0), rolls: 1 + Math.floor(m/380) + (g.gold>=3?1:0) + (g.lumina?2:0),
+      luck: g.gold*0.02 + (g.lumina?0.3:0), win: m >= 500 || g.lumina>0, title: title, note: note});
   },
   draw(c){
     const g = this.s;
@@ -3026,6 +3122,17 @@ Object.assign(GAMES.dash, {
           c.fillStyle='#141a2e'; c.fillRect(x,y,28,12); c.fillRect(x-4,y+3,6,6); c.fillRect(x+22,y-4,8,5);
           c.fillStyle='#f6fbff'; c.fillRect(x+2,y+7,14,4); c.fillRect(x+3,y+2,4,2);
           c.fillStyle='#f6fbff'; c.fillRect(x-3,y+5,3,2); break;
+        case 'lumina': {
+          const pu = (g.t/5|0)%2;
+          if (!State.opt.noflash){
+            c.globalAlpha = 0.18 + 0.10*Math.sin(g.t/6); c.fillStyle = '#7bffe0';
+            c.fillRect(x-7, y-6, 24, 20); c.globalAlpha = 1;
+          }
+          c.fillStyle = pu ? '#e6fffa' : '#b6ffe9'; c.fillRect(x,y,10,7);
+          c.fillStyle = '#7bffe0'; c.fillRect(x+10,y+1,4,5); c.fillRect(x-2,y+2,2,3);
+          c.fillStyle = '#ffffff'; c.fillRect(x+2,y+1,4,2); c.fillRect(x+1,y+2,1,1);
+          c.fillStyle = '#0d3a34'; c.fillRect(x+2,y+3,2,2);
+          break; }
       }
     }
     Particles.draw(c);
@@ -3035,8 +3142,11 @@ Object.assign(GAMES.dash, {
       drawSeal(c, g.x, g.y, o);
     }
     if (g.dash > 0){ c.fillStyle='rgba(158,229,255,.5)'; for(let i=1;i<4;i++) c.fillRect(g.x-i*6, g.y+4, 4, 6); }
+    Stick.draw(c);
     gameHUD(c, {hp:g.hp, maxhp:g.maxhp, left:'', right:Math.floor(g.dist/8)+'M',
                 mid:'FISH '+g.fish+(g.gold?'  GOLD '+g.gold:'')});
+    if (g.msgT > 0){ g.msgT--;
+      drawTextC(c, g.msg, VW/2, 26, (g.t/6|0)%2 ? '#7bffe0' : '#ffffff', 1, '#0d1024'); }
     if (g.dashCd > 0){ c.fillStyle='#2a3768'; c.fillRect(VW-42,14,40,3); c.fillStyle='#4fd6ff'; c.fillRect(VW-42,14,40*(1-g.dashCd/80),3); }
     else drawText(c,'B: DASH', VW-46, 14, '#7bffe0', 1, '#0d1024');
     if (g.over) bigMsg(c, 'CAUGHT!', Math.floor(g.dist/8)+' METRES');
@@ -3044,115 +3154,280 @@ Object.assign(GAMES.dash, {
 });
 
 /* ============================================================
-   20. ICE FISHING - tap timing, push your luck
+   20. ICE FISHING - time the throw, then steer the bobber down
+   One click sets the cast. After that you drive the lure with
+   left/right, hooking fish and treasure and dodging predators.
+   Ten fish reels the line in; a predator costs you the line and
+   everything still hanging on it. Banked catches are safe.
    ============================================================ */
-const CATCH_NAMES = [['SPRAT','SMELT','HERRING'],['COD','MACKEREL','POLLOCK'],['SALMON','HALIBUT','CHAR'],
-  ['KING CRAB','GIANT SQUID','MOON FISH'],['GOLDEN TUNA','ANCIENT COD','GLASS EEL'],['LEVIATHAN FRY','ABYSS LANTERN','PEARL RAY']];
-const CATCH_VAL = [12, 30, 70, 160, 380, 900];
+const ICE_FISH = [
+  {n:'SPRAT',   v:14,  col:'#9ee5ff', d:0},
+  {n:'HERRING', v:30,  col:'#7fd4ff', d:1},
+  {n:'COD',     v:62,  col:'#5be584', d:2},
+  {n:'SALMON',  v:120, col:'#ff9ecb', d:3},
+  {n:'HALIBUT', v:220, col:'#ffd166', d:4},
+  {n:'MOONFISH',v:420, col:'#b06bff', d:5}
+];
+const ICE_TREASURE = [
+  {n:'OLD BOOT',    v:25,  col:'#8a5a34'},
+  {n:'CLAM PURSE',  v:110, col:'#e8cf9a'},
+  {n:'SILVER CUP',  v:230, col:'#cdd8e8'},
+  {n:'PEARL CHEST', v:460, col:'#f2e9ff'},
+  {n:'LOST CROWN',  v:900, col:'#ffd166'}
+];
+const ICE_THROWS = [
+  {n:'EASY',   zone:40, spd:1.9, mult:1.0},
+  {n:'NORMAL', zone:26, spd:2.8, mult:1.35},
+  {n:'HARD',   zone:15, spd:3.9, mult:1.9}
+];
+const ICE_TOP = 74, ICE_BOTTOM = 150;
 Object.assign(GAMES.ice, {
   start(){
-    this.s = {pos:0, dir:1, spd:1.6, zone:26, chain:0, lines:3, score:0, t:0, msg:'', msgT:0,
-      caught:[], over:0, best:0, flashT:0, perfectRun:true, legend:false};
+    this.s = {
+      state:'cast', lines:3, thrown:0, banked:0, score:0, t:0, over:0,
+      bar:0, dir:1, quality:1,                 /* the throw QTE */
+      bx:120, by:ICE_TOP, vy:0.42, onLine:[], depth:0, deepest:0,
+      ents:[], spawn:0, msg:'TIME THE CAST', msgT:90, flash:0,
+      caught:0, treasures:0, legend:false, hookFx:0, reelT:0, reelKeep:false
+    };
   },
+  throwCfg(){ return ICE_THROWS[Math.min(this.s.thrown, ICE_THROWS.length-1)]; },
   update(){
     const g = this.s;
     if (quitCheck()) return;
     g.t++;
-    if (g.over){ if (--g.over <= 0) this.done(); return; }
-    if (g.msgT > 0) g.msgT--;
-    if (g.flashT > 0) g.flashT--;
-    g.pos += g.dir * g.spd * (1 + State.gear.grip*-0.02);
-    if (g.pos > 100){ g.pos = 100; g.dir = -1; } if (g.pos < 0){ g.pos = 0; g.dir = 1; }
-    if (Input.hit('a') || Input.ptr.tapped){
-      const d = Math.abs(g.pos - 50);
-      const half = g.zone/2;
-      if (d <= half*0.34){ this.hook(2); }
-      else if (d <= half){ this.hook(1); }
-      else this.miss();
+    if (g.msgT>0) g.msgT--;
+    if (g.flash>0) g.flash--;
+    if (g.hookFx>0) g.hookFx--;
+    if (g.over){ if (--g.over <= 0) this.done(); Particles.update(); return; }
+
+    if (g.state === 'cast'){
+      const cfg = this.throwCfg();
+      g.bar += g.dir * cfg.spd;
+      if (g.bar > 100){ g.bar = 100; g.dir = -1; }
+      if (g.bar < 0){ g.bar = 0; g.dir = 1; }
+      if (Input.hit('a') || Input.ptr.tapped){
+        const d = Math.abs(g.bar - 50), half = cfg.zone/2;
+        if (d <= half*0.32){ g.quality = 2; g.msg = 'PERFECT CAST!'; Audio_.sfx('perfect'); }
+        else if (d <= half){ g.quality = 1; g.msg = 'GOOD CAST'; Audio_.sfx('good'); }
+        else { g.quality = 0; g.msg = 'SLOPPY CAST'; Audio_.sfx('fail'); }
+        g.msgT = 60;
+        g.state = 'sink'; g.by = ICE_TOP; g.bx = 120; g.onLine = []; g.depth = 0;
+        g.ents = []; g.spawn = 24;
+        /* a better cast sinks faster and finds richer water */
+        g.vy = 0.30 + g.quality*0.10;
+      }
+      return;
     }
-    if (Input.hit('b')) this.bank();
+
+    if (g.state === 'reel'){
+      g.reelT--;
+      g.by -= 3.4;
+      if (g.by <= ICE_TOP || g.reelT <= 0){ this.landLine(); }
+      Particles.update();
+      return;
+    }
+
+    /* ---- sinking: steer the bobber ---- */
+    let mx = 0;
+    if (Input.key('left')) mx -= 1;
+    if (Input.key('right')) mx += 1;
+    if (Input.ptr.down){ const d = Input.ptr.x - g.bx; if (Math.abs(d) > 4) mx = d>0?1:-1; }
+    g.bx = clamp(g.bx + mx*(1.9 + State.gear.speed*0.05), 10, VW-10);
+    /* slower descent while steering hard, so you can line things up */
+    g.by += g.vy;
+    g.depth = Math.max(0, Math.round((g.by - ICE_TOP) * 1.6));
+    g.deepest = Math.max(g.deepest, g.depth);
+    if (g.by > ICE_BOTTOM){ g.msg = 'HIT THE SEABED'; g.msgT = 60; g.reelT = 60; g.state = 'reel'; g.reelKeep = true; }
+
+    /* spawn things at and below the lure */
+    g.spawn--;
+    if (g.spawn <= 0){
+      g.spawn = Math.max(14, 34 - g.depth/9);
+      const deepT = clamp(g.depth/120, 0, 1);
+      const r = Math.random();
+      if (r < 0.16 + deepT*0.16){
+        /* predators: orca up top, squid and eels deeper */
+        const kind = g.depth > 60 && chance(0.5) ? (chance(0.5)?'squid':'eel') : 'orca';
+        g.ents.push({t:'threat', kind:kind, x: chance(0.5)? -24 : VW+24, y: g.by + rnd(70,14),
+                     sp: (kind==='eel'? 1.5 : kind==='squid'? 0.85 : 1.15) * (1 + deepT*0.5),
+                     dir: 0, w: kind==='orca'?30:kind==='squid'?16:22, h: kind==='orca'?13:12, wob:rnd(6.28)});
+        g.ents[g.ents.length-1].dir = g.ents[g.ents.length-1].x < 0 ? 1 : -1;
+      } else if (r < 0.26 + deepT*0.10){
+        const tierMax = Math.min(ICE_TREASURE.length-1, Math.floor(deepT * ICE_TREASURE.length));
+        const tier = clamp(Math.floor(rnd(tierMax+1)), 0, ICE_TREASURE.length-1);
+        g.ents.push({t:'treasure', tier:tier, x:rnd(VW-24,12), y: g.by + rnd(80,26), w:12, h:10, wob:rnd(6.28)});
+      } else {
+        const tierMax = Math.min(ICE_FISH.length-1, Math.floor(deepT * ICE_FISH.length));
+        const tier = clamp(Math.round(rnd(tierMax+0.6)), 0, ICE_FISH.length-1);
+        g.ents.push({t:'fish', tier:tier, x: chance(0.5)? -16 : VW+16, y: g.by + rnd(80,10),
+                     sp: rnd(0.9,0.35) + tier*0.12, dir:0, w:10+tier, h:6, wob:rnd(6.28)});
+        g.ents[g.ents.length-1].dir = g.ents[g.ents.length-1].x < 0 ? 1 : -1;
+      }
+    }
+
+    for (let i=g.ents.length-1;i>=0;i--){
+      const e = g.ents[i];
+      if (e.t !== 'treasure'){
+        e.x += e.dir * e.sp;
+        e.y += Math.sin(g.t/26 + e.wob)*0.35;
+      } else e.y += Math.sin(g.t/34 + e.wob)*0.18;
+      if (e.x < -60 || e.x > VW+60 || e.y < g.by - 90){ g.ents.splice(i,1); continue; }
+      const hit = Math.abs(e.x + e.w/2 - g.bx) < e.w/2 + 5 && Math.abs(e.y + e.h/2 - g.by) < e.h/2 + 5;
+      if (!hit) continue;
+      if (e.t === 'fish'){
+        g.onLine.push({tier:e.tier, kind:'fish'});
+        g.ents.splice(i,1); g.hookFx = 12;
+        Audio_.sfx('fish');
+        Particles.burst(e.x, e.y, ICE_FISH[e.tier].col, 6, 1.6, 'sq');
+        g.msg = ICE_FISH[e.tier].n + '  (' + g.onLine.length + '/10)'; g.msgT = 50;
+        if (e.tier >= 4){ g.legend = true; State.stats.legendaryCatch = Math.max(State.stats.legendaryCatch||0, 1); }
+        if (g.onLine.length >= 10){ g.msg = 'FULL LINE - REELING IN'; g.msgT = 70; g.reelT = 70; g.state = 'reel'; g.reelKeep = true; Audio_.sfx('perfect'); }
+      } else if (e.t === 'treasure'){
+        /* treasure snaps the rod straight back up and costs no line */
+        g.treasures++;
+        const tr = ICE_TREASURE[e.tier];
+        g.score += Math.round(tr.v * this.throwCfg().mult);
+        g.ents.splice(i,1);
+        Audio_.sfx('legend'); shake();
+        Particles.burst(e.x, e.y, tr.col, 16, 2.4, 'star');
+        g.msg = tr.n + '! FREE CAST'; g.msgT = 90;
+        g.reelT = 60; g.state = 'reel'; g.reelKeep = true; g.freeCast = true;
+      } else {
+        /* predator: lose the line and everything on it */
+        g.lines--;
+        g.onLine = [];
+        g.ents.splice(i,1);
+        Audio_.sfx('hurt'); shake();
+        Particles.burst(g.bx, g.by, '#ff5c7a', 14, 2.4, 'sq');
+        g.msg = (e.kind==='orca'?'ORCA':e.kind==='squid'?'SQUID':'EEL') + ' TOOK THE LINE!'; g.msgT = 90;
+        g.flash = 16;
+        if (g.lines <= 0){ g.over = 80; Audio_.sfx('fail'); }
+        else { g.state = 'cast'; g.thrown++; g.bar = 0; g.dir = 1; }
+      }
+    }
+    Particles.update();
   },
-  hook(quality){
+  landLine(){
     const g = this.s;
-    g.chain++;
-    let tier = clamp(Math.floor((g.chain-1)/2) + (quality===2?1:0), 0, 5);
-    if (quality === 2) Audio_.sfx('perfect'); else Audio_.sfx('fish');
-    if (quality !== 2) g.perfectRun = false;
-    const val = Math.round(CATCH_VAL[tier] * (quality===2?1.5:1));
-    g.score += val;
-    g.caught.push({tier:tier, val:val});
-    if (tier >= 4){ g.legend = true; State.stats.legendaryCatch = Math.max(State.stats.legendaryCatch||0, 1); }
-    g.msg = pick(CATCH_NAMES[tier]) + (quality===2?'!!':'!'); g.msgT = 70; g.flashT = 10;
-    g.spd = Math.min(5.2, g.spd + 0.32);
-    g.zone = Math.max(9, g.zone - 1.7);
-    Particles.burst(120, 116, tier>=4?'#ffd166':'#9ee5ff', 8, 2, tier>=4?'star':'ring');
+    let gained = 0;
+    g.onLine.forEach(o=> gained += ICE_FISH[o.tier].v);
+    gained = Math.round(gained * this.throwCfg().mult);
+    g.score += gained;
+    g.caught += g.onLine.length;
+    if (g.onLine.length) { g.msg = 'BANKED ' + g.onLine.length + ' FISH  (+' + gained + ')'; g.msgT = 90; Audio_.sfx('coin'); }
+    g.onLine = [];
+    if (g.freeCast){ g.freeCast = false; }   /* treasure did not consume a line */
+    else { g.thrown++; }
+    g.banked++;
+    if (g.thrown >= 3 && g.lines <= 0){ g.over = 70; return; }
+    g.state = 'cast'; g.bar = 0; g.dir = 1;
   },
-  miss(){
-    const g = this.s;
-    g.lines--; g.perfectRun = false; Audio_.sfx('fail'); shake();
-    g.msg = 'LINE SNAPPED!'; g.msgT = 70;
-    if (g.lines <= 0){ g.over = 70; g.msg = 'ALL LINES GONE'; }
-    else { g.chain = Math.max(0, g.chain-2); g.spd = Math.max(1.6, g.spd-0.5); g.zone = Math.min(26, g.zone+2.5); }
-  },
-  bank(){ const g = this.s; if (!g.caught.length){ toast('NOTHING TO BANK YET'); return; } g.over = 45; g.banked = true; Audio_.sfx('good'); },
   done(){
     const g = this.s;
-    const keep = g.banked ? 1 : 0.5;
-    const score = Math.round(g.score * keep);
-    const top = g.caught.reduce((a,c)=>Math.max(a,c.tier), -1);
-    if (g.perfectRun && g.caught.length >= 5) State.stats.flawlessIce = (State.stats.flawlessIce||0)+1;
-    finishGame({score:score, fish:score*0.55, xp:score/6, rolls: 1 + (top>=2?1:0) + (top>=4?1:0),
-      luck: top*0.05, win: g.banked, cleared: g.caught.length>0,
-      title: g.banked ? 'CATCH BANKED' : 'LINE LOST',
-      note: g.caught.length + ' CATCHES' + (g.legend ? ' - LEGENDARY HOOKED' : '')});
+    const top = g.legend ? 'LEGENDARY HOOKED' : '';
+    finishGame({score:g.score, fish:g.score*0.5, xp:g.score/7,
+      rolls: 1 + Math.floor(g.score/900) + g.treasures, luck: g.treasures*0.06,
+      win: g.score >= 600, cleared: g.caught > 0 || g.treasures > 0,
+      title: g.lines > 0 ? 'LINES BANKED' : 'ALL LINES LOST',
+      note: g.caught + ' FISH - ' + g.treasures + ' TREASURE' + (top?' - '+top:'')});
   },
   draw(c){
     const g = this.s;
     drawSky(c, g.t, {a:'#0a1130', b:'#3a5a9a', night:0.8});
+    /* ice shelf with the hole */
     c.fillStyle = '#dff3ff'; c.fillRect(0,60,VW,14);
     c.fillStyle = '#9dc9f0'; c.fillRect(0,74,VW,2);
+    c.fillStyle = '#04122c'; c.fillRect(104,60,32,16);
+    c.fillStyle = '#0e3566'; c.fillRect(106,60,28,14);
+    /* water, darker with depth */
     const grd = c.createLinearGradient(0,76,0,VH);
     grd.addColorStop(0,'#1a4a8a'); grd.addColorStop(1,'#04122c');
     c.fillStyle = grd; c.fillRect(0,76,VW,VH-76);
-    c.fillStyle = '#04122c'; c.fillRect(104,60,32,16);
-    c.fillStyle = '#0e3566'; c.fillRect(106,60,28,14);
-    /* rod + line */
-    c.fillStyle = '#8a5a34'; c.fillRect(84,44,2,18);
-    c.fillStyle = '#c9c2a0';
-    const hookY = 92 + Math.sin(g.t/30)*4;
-    c.fillRect(119, 62, 1, hookY-62);
-    c.fillStyle = '#cdd8e8'; c.fillRect(117, hookY, 4, 3);
-    /* fish shadows */
-    for (let i=0;i<7;i++){
-      const x = (i*44 + g.t*(0.4+i*0.12)) % (VW+40) - 20;
-      const y = 100 + (i%4)*13;
-      c.fillStyle = 'rgba(158,229,255,.22)';
-      c.fillRect(x, y, 9, 4); c.fillRect(x+9, y+1, 3, 2);
+    for (let i=0;i<24;i++){
+      const y = 80 + ((i*33 + g.t*0.35) % (VH-80));
+      c.fillStyle = 'rgba(255,255,255,.07)'; c.fillRect((i*53)%VW, y, 2, 2);
     }
+    c.fillStyle = '#0a2a4a'; c.fillRect(0, ICE_BOTTOM+6, VW, VH);
+
     /* seal at the hole */
     drawSeal(c, 62, 46, playerLook({facing:1, frame:(g.t/26|0)%2}));
-    /* caught stack */
-    for (let i=0;i<g.caught.length && i<12;i++){
-      const cc = g.caught[i];
-      c.fillStyle = RARITY[Math.min(cc.tier,5)].c;
-      c.fillRect(4 + i*7, 84, 5, 5);
+    c.fillStyle = '#8a5a34'; c.fillRect(84,44,2,18);
+
+    if (g.state !== 'cast'){
+      /* line + bobber */
+      c.fillStyle = '#c9c2a0'; c.fillRect(119, 62, 1, Math.max(0, g.by-62));
+      /* what is hanging on the line */
+      for (let i=0;i<g.onLine.length;i++){
+        const o = g.onLine[i];
+        c.fillStyle = ICE_FISH[o.tier].col;
+        c.fillRect(114 + (i%5)*3, 64 + ((i/5)|0)*4, 2, 3);
+      }
+      /* entities */
+      for (const e of g.ents){
+        const x = e.x|0, y = e.y|0;
+        if (e.t === 'fish'){
+          const f = ICE_FISH[e.tier];
+          c.fillStyle = f.col; c.fillRect(x, y, 6+e.tier, 4);
+          c.fillStyle = f.col; c.fillRect(x + (e.dir>0?6+e.tier:-3), y+1, 3, 2);
+          c.fillStyle = '#0d1024'; c.fillRect(x + (e.dir>0?1:4+e.tier), y+1, 1, 1);
+          if (e.tier >= 4){ c.fillStyle='#ffffff'; c.fillRect(x+2, y-1, 2, 1); }
+        } else if (e.t === 'treasure'){
+          const tr = ICE_TREASURE[e.tier];
+          const gl = (g.t/8|0)%2;
+          c.fillStyle = gl ? tr.col : '#8a5a34'; c.fillRect(x, y, 12, 9);
+          c.fillStyle = '#5e3b21'; c.fillRect(x, y+4, 12, 2); c.fillRect(x+5, y, 2, 9);
+          c.fillStyle = '#fff3b0'; c.fillRect(x+1, y+1, 3, 2);
+        } else {
+          if (e.kind === 'orca'){
+            c.fillStyle='#141a2e'; c.fillRect(x,y,28,12); c.fillRect(x+(e.dir>0?24:-4),y+3,6,6);
+            c.fillStyle='#f6fbff'; c.fillRect(x+4,y+7,14,4); c.fillRect(x+3,y+2,4,2);
+          } else if (e.kind === 'squid'){
+            c.fillStyle='#b06bff'; c.fillRect(x+2,y,12,8);
+            c.fillStyle='#8d4a96'; for(let k=0;k<4;k++) c.fillRect(x+2+k*3, y+8, 2, 5+((k+g.t/6|0)%3));
+            c.fillStyle='#ffffff'; c.fillRect(x+4,y+2,2,2); c.fillRect(x+9,y+2,2,2);
+          } else {
+            c.fillStyle='#5a7f4a'; for(let k=0;k<6;k++) c.fillRect(x+k*4, y + Math.sin(g.t/7+k)*3, 4, 4);
+            c.fillStyle='#0d1024'; c.fillRect(x+(e.dir>0?21:1), y+1, 1, 1);
+          }
+        }
+      }
+      /* the bobber itself */
+      const bx = g.bx|0, by = g.by|0;
+      c.fillStyle = g.hookFx>0 ? '#ffffff' : '#e05a5a'; c.fillRect(bx-3, by-4, 6, 4);
+      c.fillStyle = '#f6fbff'; c.fillRect(bx-3, by, 6, 3);
+      c.fillStyle = '#cdd8e8'; c.fillRect(bx-1, by+3, 2, 3);
+      if (!State.opt.noflash && g.hookFx>0){ c.fillStyle='rgba(255,255,255,.35)'; c.fillRect(bx-8,by-9,16,16); }
     }
-    /* timing bar */
-    const bx = 24, bw = VW-48, by = 130;
-    c.fillStyle = '#0d1024'; c.fillRect(bx-2, by-2, bw+4, 16);
-    c.fillStyle = '#3a2a44'; c.fillRect(bx, by, bw, 12);
-    const zw = bw * g.zone/100;
-    c.fillStyle = '#2a7a48'; c.fillRect(bx + bw/2 - zw/2, by, zw, 12);
-    c.fillStyle = '#5be584'; c.fillRect(bx + bw/2 - zw*0.17, by, zw*0.34, 12);
-    const mx = bx + bw * g.pos/100;
-    c.fillStyle = g.flashT>0 ? '#ffffff' : '#ffd166'; c.fillRect(mx-1, by-3, 3, 18);
-    gameHUD(c, {left:'LINES ' + '|'.repeat(Math.max(0,g.lines)), right:fmt(g.score), mid:'CHAIN '+g.chain,
-                leftCol:'#ff9ecb'});
-    drawTextC(c, 'A: HOOK    B: BANK AND LEAVE', VW/2, 148, '#8fa3d6', 1);
-    if (g.msgT > 0) drawTextC(c, g.msg, VW/2, 108, g.msg.indexOf('SNAP')>=0 ? '#ff5c7a' : '#ffd166', 1, '#0d1024');
-    drawTextC(c, 'DEEPER = RARER. BANK BEFORE THE LINE SNAPS.', VW/2, 120, '#6f86b8', 1);
     Particles.draw(c);
-    if (g.over) bigMsg(c, g.banked ? 'BANKED' : 'LOST HALF', fmt(g.score) + ' VALUE');
+
+    /* HUD */
+    gameHUD(c, {left:'LINES ' + '|'.repeat(Math.max(0,g.lines)), right:fmt(g.score),
+                mid: g.state==='cast' ? 'CAST: '+this.throwCfg().n : g.depth+'M  ON LINE '+g.onLine.length+'/10',
+                leftCol:'#ff9ecb'});
+    if (g.flash > 0 && !State.opt.noflash){
+      c.fillStyle = 'rgba(255,92,122,.30)'; c.fillRect(0,0,VW,VH);
+    }
+    if (g.state === 'cast'){
+      const cfg = this.throwCfg();
+      const bx = 24, bw = VW-48, by = 128;
+      c.fillStyle = 'rgba(9,12,30,.85)'; c.fillRect(12, 96, VW-24, 52);
+      drawTextC(c, 'CAST ' + (g.thrown+1) + ' - ' + cfg.n + ' (x' + cfg.mult.toFixed(2) + ')',
+                VW/2, 102, cfg.n==='HARD' ? '#ff5c7a' : cfg.n==='NORMAL' ? '#ffd166' : '#7bffe0', 1);
+      drawTextC(c, 'A ON THE GREEN', VW/2, 112, '#cfe0ff', 1);
+      c.fillStyle = '#0d1024'; c.fillRect(bx-2, by-2, bw+4, 16);
+      c.fillStyle = '#3a2a44'; c.fillRect(bx, by, bw, 12);
+      const zw = bw * cfg.zone/100;
+      c.fillStyle = '#2a7a48'; c.fillRect(bx + bw/2 - zw/2, by, zw, 12);
+      c.fillStyle = '#5be584'; c.fillRect(bx + bw/2 - zw*0.16, by, zw*0.32, 12);
+      const mx = bx + bw * g.bar/100;
+      c.fillStyle = '#ffd166'; c.fillRect(mx-1, by-3, 3, 18);
+    } else {
+      drawTextC(c, 'LEFT / RIGHT TO STEER THE LURE', VW/2, 150, '#9ec4e8', 1, '#04122c');
+    }
+    if (g.msgT > 0) drawTextC(c, g.msg, VW/2, 86,
+      g.msg.indexOf('TOOK')>=0 ? '#ff5c7a' : g.msg.indexOf('!')>=0 ? '#ffd166' : '#ffffff', 1, '#0d1024');
+    if (g.over) bigMsg(c, g.lines>0 ? 'DONE' : 'LINES GONE', fmt(g.score) + ' VALUE');
   }
 });
 
@@ -3200,7 +3475,8 @@ Object.assign(GAMES.floe, {
     let mx=0,my=0;
     if (Input.key('left')) mx-=1; if (Input.key('right')) mx+=1;
     if (Input.key('up')) my-=1; if (Input.key('down')) my+=1;
-    const ps = pointerSteer(g.x+12, g.y+7); if (ps){ mx=ps.x; my=ps.y; }
+    const st = Stick.read(); if (st){ mx = st.x; my = st.y; }
+    else if (mx || my){ const n = Math.hypot(mx,my)||1; mx /= n; my /= n; }   /* even diagonal speed */
     if (mx) g.facing = mx > 0 ? 1 : -1;
     let nx = g.x + mx*sp, ny = g.y + my*sp;
     /* stay on the floe (ellipse) */
@@ -3304,6 +3580,7 @@ Object.assign(GAMES.floe, {
       const ax = g.x + 12 + g.facing*14;
       c.fillRect(ax-4, g.y+2, 8, 3); c.fillRect(ax-2, g.y-1, 4, 9);
     }
+    Stick.draw(c);
     gameHUD(c, {hp:g.hp, maxhp:g.maxhp, left:'', right:fmt(g.score), mid:'WAVE '+g.wave});
     if (g.boss){
       c.fillStyle='#3a1020'; c.fillRect(40,14,160,5);
@@ -3318,31 +3595,59 @@ Object.assign(GAMES.floe, {
 function addFishPop(g, txt){ g.msg = txt; g.msgT = 70; }
 
 /* ============================================================
-   22. PEARL MATCH - match-3 bonus room
+   22. PEARL MATCH - connected-group bonus room
+   Groups are flood filled, so any blob of 3+ touching gems clears,
+   not just straight lines. Swaps slide, cascades chain.
    ============================================================ */
 const GEM_COL = [['#ff5c7a','#a02c46'],['#4fd6ff','#1b6a9a'],['#5be584','#2a7a48'],['#ffd166','#b07a1a'],['#b06bff','#6a3a9a']];
+const GRID_X = 66, GRID_Y = 34, CELL = 18, GN = 6;
 Object.assign(GAMES.pearl, {
   start(){
-    const g = this.s = {grid:[], cx:2, cy:2, sel:null, moves:16, score:0, pearls:0, t:0, state:'idle',
-                        anim:0, fall:[], over:0, combo:0, msg:'', msgT:0};
-    for (let y=0;y<6;y++){ g.grid[y] = []; for (let x=0;x<6;x++) g.grid[y][x] = this.newGem(x,y); }
+    const g = this.s = {grid:[], cx:2, cy:2, sel:null, moves:16, score:0, pearls:0, t:0,
+      state:'intro', anim:0, over:0, combo:0, msg:'', msgT:0, slide:null, drops:[], best:0};
+    for (let y=0;y<GN;y++){ g.grid[y] = []; for (let x=0;x<GN;x++) g.grid[y][x] = this.newGem(); }
     let guard = 0;
-    while (this.findMatches().length && guard++ < 60){
-      this.findMatches().forEach(m=>{ g.grid[m.y][m.x] = this.newGem(m.x,m.y); });
+    while (this.findGroups().length && guard++ < 200){
+      this.findGroups().forEach(grp=> grp.forEach(p=>{ g.grid[p.y][p.x] = this.newGem(); }));
     }
   },
   newGem(){ return chance(0.055) ? 5 : rndi(5); },
-  at(x,y){ const g = this.s; return (x<0||y<0||x>5||y>5) ? -1 : g.grid[y][x]; },
-  findMatches(){
-    const g = this.s, out = [], seen = {};
-    for (let y=0;y<6;y++) for (let x=0;x<6;x++){
-      const v = g.grid[y][x]; if (v < 0) continue;
-      let n = 1; while (this.at(x+n,y) === v) n++;
-      if (n >= 3) for (let i=0;i<n;i++){ const k = (x+i)+','+y; if (!seen[k]){ seen[k]=1; out.push({x:x+i,y:y}); } }
-      n = 1; while (this.at(x,y+n) === v) n++;
-      if (n >= 3) for (let i=0;i<n;i++){ const k = x+','+(y+i); if (!seen[k]){ seen[k]=1; out.push({x:x,y:y+i}); } }
+  at(x,y){ const g = this.s; return (x<0||y<0||x>=GN||y>=GN) ? -1 : g.grid[y][x]; },
+  /* every connected blob of 3 or more matching gems */
+  findGroups(){
+    const g = this.s, seen = {}, out = [];
+    for (let y=0;y<GN;y++) for (let x=0;x<GN;x++){
+      const v = g.grid[y][x];
+      if (v < 0 || seen[x+','+y]) continue;
+      const stack = [{x:x,y:y}], grp = [];
+      seen[x+','+y] = 1;
+      while (stack.length){
+        const p = stack.pop(); grp.push(p);
+        [[1,0],[-1,0],[0,1],[0,-1]].forEach(d=>{
+          const nx = p.x+d[0], ny = p.y+d[1], k = nx+','+ny;
+          if (seen[k]) return;
+          if (this.at(nx,ny) !== v) return;
+          seen[k] = 1; stack.push({x:nx, y:ny});
+        });
+      }
+      if (grp.length >= 3) out.push(grp);
     }
     return out;
+  },
+  /* would swapping these two produce anything? */
+  wouldMatch(a, b){
+    const g = this.s;
+    const t = g.grid[a.y][a.x]; g.grid[a.y][a.x] = g.grid[b.y][b.x]; g.grid[b.y][b.x] = t;
+    const ok = this.findGroups().length > 0;
+    const t2 = g.grid[a.y][a.x]; g.grid[a.y][a.x] = g.grid[b.y][b.x]; g.grid[b.y][b.x] = t2;
+    return ok;
+  },
+  anyMoveLeft(){
+    for (let y=0;y<GN;y++) for (let x=0;x<GN;x++){
+      if (x < GN-1 && this.wouldMatch({x:x,y:y},{x:x+1,y:y})) return true;
+      if (y < GN-1 && this.wouldMatch({x:x,y:y},{x:x,y:y+1})) return true;
+    }
+    return false;
   },
   update(){
     const g = this.s;
@@ -3350,41 +3655,75 @@ Object.assign(GAMES.pearl, {
     g.t++;
     if (g.msgT>0) g.msgT--;
     if (g.over){ if (--g.over <= 0) this.done(); Particles.update(); return; }
+
+    if (g.state === 'intro'){
+      if (Input.hit('a') || Input.hit('b') || Input.ptr.tapped || g.t > 420) g.state = 'idle';
+      return;
+    }
+    /* the two gems slide past each other before anything resolves */
+    if (g.state === 'slide'){
+      g.slide.t++;
+      if (g.slide.t >= 9){
+        const s = g.slide, a = s.a, b = s.b;
+        const t = g.grid[a.y][a.x]; g.grid[a.y][a.x] = g.grid[b.y][b.x]; g.grid[b.y][b.x] = t;
+        g.slide = null;
+        if (s.bad){ g.state = 'idle'; }
+        else { g.moves--; g.state = 'resolve'; g.anim = 6; g.combo = 0; }
+      }
+      return;
+    }
     if (g.state === 'resolve'){
       g.anim--;
       if (g.anim <= 0){
-        const m = this.findMatches();
-        if (m.length){
+        const groups = this.findGroups();
+        if (groups.length){
           g.combo++;
-          let pearls = 0;
-          m.forEach(p=>{ if (g.grid[p.y][p.x] === 5) pearls++; });
-          g.pearls += pearls;
-          g.score += m.length * 12 * g.combo + pearls * 60;
-          m.forEach(p=>{
-            Particles.burst(66 + p.x*18 + 8, 34 + p.y*18 + 8, g.grid[p.y][p.x]===5?'#f2e9ff':GEM_COL[g.grid[p.y][p.x]][0], 5, 1.6, 'sq');
-            g.grid[p.y][p.x] = -1;
+          let cleared = 0, pearls = 0;
+          groups.forEach(grp=>{
+            /* bigger blobs pay much better than the minimum three */
+            const size = grp.length;
+            grp.forEach(p=>{
+              if (g.grid[p.y][p.x] === 5) pearls++;
+              Particles.burst(GRID_X + p.x*CELL + 8, GRID_Y + p.y*CELL + 8,
+                g.grid[p.y][p.x]===5 ? '#f2e9ff' : GEM_COL[g.grid[p.y][p.x]][0], 5, 1.6, 'sq');
+              g.grid[p.y][p.x] = -1; cleared++;
+            });
+            g.score += Math.round(10 * size * (1 + (size-3)*0.55) * g.combo);
+            if (size >= 6){ g.msg = size + ' IN ONE BLOB!'; g.msgT = 70; }
           });
+          g.pearls += pearls;
+          g.score += pearls * 60;
+          g.best = Math.max(g.best, cleared);
           Audio_.sfx(pearls ? 'perfect' : g.combo > 1 ? 'good' : 'coin');
-          if (g.combo > 1){ g.msg = 'COMBO x' + g.combo; g.msgT = 60; }
-          /* gravity */
-          for (let x=0;x<6;x++){
-            let write = 5;
-            for (let y=5;y>=0;y--) if (g.grid[y][x] >= 0){ g.grid[write][x] = g.grid[y][x]; if (write!==y) g.grid[y][x] = -1; write--; }
-            for (let y=write;y>=0;y--) g.grid[y][x] = this.newGem();
+          if (g.combo > 1 && g.msgT <= 0){ g.msg = 'CASCADE x' + g.combo; g.msgT = 60; }
+          /* gravity, and remember the fall distance so gems can be drawn dropping */
+          g.drops = [];
+          for (let x=0;x<GN;x++){
+            let write = GN-1;
+            for (let y=GN-1;y>=0;y--) if (g.grid[y][x] >= 0){
+              g.grid[write][x] = g.grid[y][x];
+              if (write!==y){ g.grid[y][x] = -1; g.drops.push({x:x, y:write, d:write-y}); }
+              write--;
+            }
+            for (let y=write;y>=0;y--){ g.grid[y][x] = this.newGem(); g.drops.push({x:x, y:y, d:write+1}); }
           }
-          g.anim = 12;
-        } else { g.state = 'idle'; g.combo = 0; if (g.moves <= 0) g.over = 50; }
+          g.anim = 10;
+        } else {
+          g.state = 'idle'; g.combo = 0; g.drops = [];
+          if (g.moves <= 0){ g.over = 60; g.endReason = 'OUT OF MOVES'; Audio_.sfx('good'); }
+          else if (!this.anyMoveLeft()){ g.over = 60; g.endReason = 'NO MOVES LEFT'; Audio_.sfx('fail'); }
+        }
       }
       Particles.update(); return;
     }
     /* cursor */
-    if (Input.hit('left')) g.cx = clamp(g.cx-1,0,5);
-    if (Input.hit('right')) g.cx = clamp(g.cx+1,0,5);
-    if (Input.hit('up')) g.cy = clamp(g.cy-1,0,5);
-    if (Input.hit('down')) g.cy = clamp(g.cy+1,0,5);
+    if (Input.hit('left')) g.cx = clamp(g.cx-1,0,GN-1);
+    if (Input.hit('right')) g.cx = clamp(g.cx+1,0,GN-1);
+    if (Input.hit('up')) g.cy = clamp(g.cy-1,0,GN-1);
+    if (Input.hit('down')) g.cy = clamp(g.cy+1,0,GN-1);
     if (Input.ptr.tapped){
-      const gx = Math.floor((Input.ptr.x - 66)/18), gy = Math.floor((Input.ptr.y - 34)/18);
-      if (gx>=0&&gx<6&&gy>=0&&gy<6){
+      const gx = Math.floor((Input.ptr.x - GRID_X)/CELL), gy = Math.floor((Input.ptr.y - GRID_Y)/CELL);
+      if (gx>=0&&gx<GN&&gy>=0&&gy<GN){
         if (g.sel && (Math.abs(g.sel.x-gx)+Math.abs(g.sel.y-gy)) === 1) this.trySwap(g.sel, {x:gx,y:gy});
         else { g.sel = {x:gx,y:gy}; g.cx=gx; g.cy=gy; Audio_.sfx('blip'); }
       }
@@ -3399,20 +3738,53 @@ Object.assign(GAMES.pearl, {
   },
   trySwap(a, b){
     const g = this.s;
-    const t = g.grid[a.y][a.x]; g.grid[a.y][a.x] = g.grid[b.y][b.x]; g.grid[b.y][b.x] = t;
-    if (!this.findMatches().length){
-      const t2 = g.grid[a.y][a.x]; g.grid[a.y][a.x] = g.grid[b.y][b.x]; g.grid[b.y][b.x] = t2;
-      Audio_.sfx('back'); g.msg = 'NO MATCH'; g.msgT = 40;
-    } else {
-      g.moves--; g.state = 'resolve'; g.anim = 8; g.combo = 0; Audio_.sfx('select');
-    }
+    const good = this.wouldMatch(a, b);
+    g.slide = {a:a, b:b, t:0, bad:!good};
+    g.state = 'slide';
     g.sel = null;
+    if (good) Audio_.sfx('select');
+    else { Audio_.sfx('back'); g.msg = 'NO MATCH THERE'; g.msgT = 44; }
   },
   done(){
     const g = this.s;
-    finishGame({score:g.score, fish:g.score*0.32, xp:g.score/12,
-      rolls: 1 + Math.floor(g.pearls/2) + Math.floor(g.score/1600), luck: g.pearls*0.05,
-      win:true, title:'BONUS ROOM CLEARED', note: g.pearls + ' PEARL GEMS - ' + fmt(g.score) + ' PTS'});
+    finishGame({score:g.score, fish:g.score*0.30, xp:g.score/13,
+      rolls: 1 + Math.floor(g.pearls/2) + Math.floor(g.score/1800), luck: g.pearls*0.05,
+      win:true, title:'BONUS ROOM CLEARED',
+      note: g.pearls + ' PEARLS - BEST ' + g.best});
+  },
+  /* where a gem should be drawn, accounting for slide and drop animation */
+  gemPos(x, y){
+    const g = this.s;
+    let px = GRID_X + x*CELL, py = GRID_Y + y*CELL;
+    if (g.slide){
+      const s = g.slide, k = s.bad ? (s.t < 5 ? s.t/5 : (9-s.t)/4) : s.t/9;
+      if (s.a.x===x && s.a.y===y){ px += (s.b.x-s.a.x)*CELL*k; py += (s.b.y-s.a.y)*CELL*k; }
+      else if (s.b.x===x && s.b.y===y){ px += (s.a.x-s.b.x)*CELL*k; py += (s.a.y-s.b.y)*CELL*k; }
+    }
+    if (g.state === 'resolve' && g.anim > 0 && g.drops.length){
+      const d = g.drops.find(o=> o.x===x && o.y===y);
+      if (d) py -= d.d * CELL * (g.anim/10);
+    }
+    return {x:px, y:py};
+  },
+  drawGem(c, v, px, py){
+    if (v === 5){
+      c.fillStyle = '#f2e9ff'; c.fillRect(px+2,py+2,12,12);
+      c.fillStyle = '#cdd8e8'; c.fillRect(px+2,py+9,12,5);
+      c.fillStyle = '#ffffff'; c.fillRect(px+4,py+4,4,3);
+      c.fillStyle = '#b06bff'; c.fillRect(px+6,py+7,4,4);
+      return;
+    }
+    c.fillStyle = GEM_COL[v][1]; c.fillRect(px+1,py+1,14,14);
+    c.fillStyle = GEM_COL[v][0]; c.fillRect(px+2,py+2,12,12);
+    c.fillStyle = 'rgba(255,255,255,.55)'; c.fillRect(px+3,py+3,4,2);
+    /* shape coding so the colours are not the only signal */
+    c.fillStyle = 'rgba(13,16,36,.68)';
+    if (v===0) c.fillRect(px+6,py+6,4,4);
+    if (v===1){ c.fillRect(px+5,py+7,6,2); c.fillRect(px+7,py+5,2,6); }
+    if (v===2){ c.fillRect(px+5,py+9,6,2); c.fillRect(px+7,py+5,2,2); }
+    if (v===3){ c.fillRect(px+4,py+7,8,2); }
+    if (v===4){ c.fillRect(px+7,py+4,2,8); }
   },
   draw(c){
     const g = this.s;
@@ -3421,38 +3793,47 @@ Object.assign(GAMES.pearl, {
     c.fillStyle = grd; c.fillRect(0,0,VW,VH);
     for (let i=0;i<20;i++){ c.fillStyle = 'rgba(158,229,255,.10)';
       c.fillRect((i*37 + g.t*0.2)%VW, (i*29 + Math.sin(g.t/40+i)*8)%VH, 2, 2); }
-    c.fillStyle = 'rgba(9,12,30,.6)'; c.fillRect(62,30,116,116);
-    for (let y=0;y<6;y++) for (let x=0;x<6;x++){
+    c.fillStyle = 'rgba(9,12,30,.6)'; c.fillRect(GRID_X-4,GRID_Y-4,CELL*GN+8,CELL*GN+8);
+
+    for (let y=0;y<GN;y++) for (let x=0;x<GN;x++){
       const v = g.grid[y][x]; if (v < 0) continue;
-      const px = 66 + x*18, py = 34 + y*18;
-      if (v === 5){
-        c.fillStyle = '#f2e9ff'; c.fillRect(px+2,py+2,12,12);
-        c.fillStyle = '#cdd8e8'; c.fillRect(px+2,py+9,12,5);
-        c.fillStyle = '#ffffff'; c.fillRect(px+4,py+4,4,3);
-      } else {
-        c.fillStyle = GEM_COL[v][1]; c.fillRect(px+1,py+1,14,14);
-        c.fillStyle = GEM_COL[v][0]; c.fillRect(px+2,py+2,12,12);
-        c.fillStyle = 'rgba(255,255,255,.55)'; c.fillRect(px+3,py+3,4,2);
-        /* shape coding for colour-blind play */
-        c.fillStyle = 'rgba(13,16,36,.65)';
-        if (v===0) c.fillRect(px+6,py+6,4,4);
-        if (v===1){ c.fillRect(px+5,py+7,6,2); c.fillRect(px+7,py+5,2,6); }
-        if (v===2){ c.fillRect(px+5,py+9,6,2); c.fillRect(px+7,py+5,2,2); }
-        if (v===3){ c.fillRect(px+4,py+7,8,2); }
-        if (v===4){ c.fillRect(px+7,py+4,2,8); }
-      }
+      const p = this.gemPos(x,y);
+      this.drawGem(c, v, p.x, p.y);
     }
-    if (g.sel){ c.strokeStyle = '#ffd166'; c.lineWidth = 1; c.strokeRect(66.5+g.sel.x*18, 34.5+g.sel.y*18, 15, 15); }
-    const cx = 66 + g.cx*18, cy = 34 + g.cy*18;
+    if (g.sel){ c.strokeStyle = '#ffd166'; c.lineWidth = 1;
+      c.strokeRect(GRID_X+0.5+g.sel.x*CELL, GRID_Y+0.5+g.sel.y*CELL, CELL-3, CELL-3); }
+    const cx = GRID_X + g.cx*CELL, cy = GRID_Y + g.cy*CELL;
     c.strokeStyle = (g.t/8|0)%2 ? '#ffffff' : '#4fd6ff'; c.lineWidth = 1;
-    c.strokeRect(cx-0.5, cy-0.5, 17, 17);
-    /* side seal */
-    drawSeal(c, 18, 100, playerLook({facing:1, frame:(g.t/20|0)%2}));
+    c.strokeRect(cx-0.5, cy-0.5, CELL-1, CELL-1);
+
+    drawSeal(c, 14, 100, playerLook({facing:1, frame:(g.t/20|0)%2}));
     Particles.draw(c);
-    gameHUD(c, {left:'MOVES '+g.moves, right:fmt(g.score), mid:'PEARLS '+g.pearls, leftCol: g.moves<=3?'#ff5c7a':'#ffffff'});
+    gameHUD(c, {left:'MOVES '+g.moves, right:fmt(g.score), mid:'PEARLS '+g.pearls,
+                leftCol: g.moves<=3?'#ff5c7a':'#ffffff'});
     if (g.msgT > 0) drawTextC(c, g.msg, VW/2, 22, '#ffd166', 1, '#0d1024');
-    drawTextC(c, 'MATCH 3 - PEARL GEMS ADD LOOT ROLLS', VW/2, 150, '#6f86b8', 1);
-    if (g.over) bigMsg(c, 'ROOM CLEAR', fmt(g.score) + ' PTS');
+    drawTextC(c, 'SWAP NEIGHBOURS - 3+ TOUCHING CLEARS', VW/2, 152, '#6f86b8', 1);
+
+    if (g.state === 'intro'){
+      c.fillStyle = 'rgba(6,9,24,.90)'; c.fillRect(10,18,VW-20,124);
+      c.strokeStyle = '#4fd6ff'; c.lineWidth = 1; c.strokeRect(10.5,18.5,VW-21,123);
+      drawTextC(c, 'PEARL MATCH', VW/2, 24, '#7bffe0', 1);
+      const lines = [
+        'SWAP TWO GEMS THAT TOUCH.',
+        'ANY BLOB OF 3+ MATCHING GEMS CLEARS -',
+        'NOT JUST STRAIGHT LINES. BIGGER BLOBS',
+        'AND CASCADES SCORE FAR MORE.',
+        '',
+        'WHITE PEARL GEMS ADD LOOT ROLLS.',
+        'YOU HAVE 16 MOVES.',
+        '',
+        'MOVE: ARROWS OR TAP    SWAP: A'
+      ];
+      lines.forEach((s,i)=> drawTextC(c, s, VW/2, 38 + i*11, i===5 ? '#f2e9ff' : '#cfe0ff', 1));
+      drawTextC(c, (g.t/16|0)%2 ? 'PRESS A TO START' : '', VW/2, 132, '#ffd166', 1);
+    }
+    if (g.over){
+      bigMsg(c, g.endReason === 'NO MOVES LEFT' ? 'NO MOVES LEFT' : 'ROOM CLEAR', fmt(g.score) + ' PTS');
+    }
   }
 });
 
@@ -3462,7 +3843,7 @@ Object.assign(GAMES.pearl, {
 Object.assign(GAMES.slide, {
   start(){
     const g = this.s = {wx:0, y:70, vy:0, spd:2.2, t:0, air:false, spin:0, spinT:0, combo:0, tricks:0,
-      score:0, time:60*60, stumble:0, segs:[], msg:'', msgT:0, over:0, best:0, land:0};
+      score:0, time:60*60, stumble:0, segs:[], msg:'', msgT:0, over:0, best:0, land:0, splash:0, falls:0};
     g.segs.push({x:0, w:200, type:'slope', y0:70, y1:76});
     for (let i=0;i<40;i++) this.addSeg();
   },
@@ -3503,12 +3884,29 @@ Object.assign(GAMES.slide, {
     /* physics */
     g.vy += 0.34;
     g.y += g.vy;
+    /* fell in the water: sink, then climb back out where the ice resumes */
+    if (g.splash > 0){
+      g.splash--;
+      g.y = Math.min(g.y + 0.6, 150);
+      g.spd = Math.max(1.1, g.spd - 0.03);
+      if (g.splash === 0){
+        const land = this.groundAt(px);
+        g.y = (land == null ? 150 : land - 8);
+        g.vy = 0; g.stumble = 26;
+      }
+      Particles.update();
+      if (g.splash % 6 === 0) Particles.burst(60, g.y, '#9ee5ff', 2, 1.2, 'ring');
+      return;
+    }
     if (gy == null){
       g.air = true;
-      if (g.y > 150){ g.y = 150; g.vy = 0; g.stumble = 40; g.spd = 1.4; g.combo = 0;
-        if (!g.fell){ Audio_.sfx('fail'); shake(); g.msg='SPLASH!'; g.msgT=45; g.fell = 12; } }
+      if (g.y > 138 && !g.splash){
+        g.splash = 34; g.combo = 0; g.tricksThisAir = 0; g.spinT = 0; g.spin = 0;
+        g.spd = Math.max(1.2, g.spd * 0.5);
+        Audio_.sfx('splash'); shake(); g.msg = 'SPLASH! CLIMBING OUT'; g.msgT = 60;
+        Particles.burst(60, 146, '#9ee5ff', 14, 2.4, 'ring');
+      }
     } else {
-      g.fell = 0;
       if (g.y >= gy - 8){
         if (g.air){
           /* landing */
@@ -3600,7 +3998,7 @@ const DIG_TABLE = [
 ];
 Object.assign(GAMES.dig, {
   start(){
-    this.s = {x:110, t:0, time:50*60, score:0, digs:0, finds:{}, state:'walk', bar:0, dir:1,
+    this.s = {x:110, t:0, time:50*60, score:0, digs:0, finds:{}, state:'walk', bar:0, dir:1, mercy:0,
       zone:30, msg:'DIG WHERE THE SAND BUBBLES', msgT:90, over:0, spots:[], reveal:null, revealT:0, pearls:0};
     for (let i=0;i<7;i++) this.s.spots.push({x: 16 + i*30 + rnd(10), used:0, wob:rnd(6.28)});
   },
@@ -3620,9 +4018,10 @@ Object.assign(GAMES.dig, {
       if (mx) g.face = mx;
       const near = g.spots.find(s=> !s.used && Math.abs(s.x - (g.x+12)) < 14);
       if (Input.hit('a') && near){ g.state = 'dig'; g.target = near; g.bar = 0; g.dir = 1;
-        g.zone = clamp(34 - g.digs*1.6 + State.gear.grip*2, 12, 34); Audio_.sfx('blip'); }
+        /* each miss widens the next window, so a bad streak self-corrects */
+        g.zone = clamp(36 - g.digs*1.3 + g.mercy*5 + State.gear.grip*2, 14, 52); Audio_.sfx('blip'); }
     } else {
-      g.bar += g.dir * (2.4 + g.digs*0.18);
+      g.bar += g.dir * Math.max(1.7, 2.4 + g.digs*0.16 - g.mercy*0.45);
       if (g.bar > 100){ g.bar = 100; g.dir = -1; }
       if (g.bar < 0){ g.bar = 0; g.dir = 1; }
       if (Input.hit('a') || Input.ptr.tapped){
@@ -3630,8 +4029,12 @@ Object.assign(GAMES.dig, {
         g.state = 'walk'; g.digs++; g.target.used = 1;
         Audio_.sfx('dig');
         Particles.burst(g.target.x, 120, '#e8cf9a', 8, 1.8, 'sq');
-        if (d > half){ g.msg = 'MISSED - SAND COLLAPSED'; g.msgT = 60; g.score -= 10; }
+        if (d > half){
+          g.mercy = Math.min(4, g.mercy + 1);
+          g.msg = 'MISSED - NEXT DIG IS EASIER'; g.msgT = 60; g.score -= 10;
+        }
         else {
+          g.mercy = Math.max(0, g.mercy - 1);
           const perfect = d <= half*0.3;
           const item = this.roll(perfect);
           g.finds[item.k] = (g.finds[item.k]||0) + 1;
@@ -3710,17 +4113,24 @@ Object.assign(GAMES.dig, {
    25. SYNCHRONIZED SWIM - rhythm routine
    ============================================================ */
 const SYNC_DIRS = ['up','down','left','right'];
+const SYNC_MAX_MISS = 10;
 Object.assign(GAMES.sync, {
   start(){
-    const g = this.s = {notes:[], t:0, idx:0, combo:0, best:0, perfect:0, good:0, miss:0, score:0,
-      judge:'', judgeT:0, over:0, hitFx:0, lead:0};
-    const r = mulberry32(hashStr('sync'+dayIndex()+State.stats.plays.sync));
-    let tt = 90;
-    for (let i=0;i<44;i++){
-      g.notes.push({d:(r()*4)|0, t:tt, hit:0});
-      tt += (r() < 0.25) ? 16 : (r() < 0.5 ? 24 : 32);
-    }
-    g.endT = tt + 120;
+    const g = this.s = {notes:[], t:0, combo:0, best:0, perfect:0, good:0, miss:0, score:0,
+      judge:'', judgeT:0, over:0, hitFx:0, nextT:120, spd:2.0, level:1, lvlT:0, msg:'', msgT:0};
+  },
+  /* the routine never ends - it just gets faster until you drop ten */
+  spawn(){
+    const g = this.s;
+    /* 0 to ~2.4 over about three minutes of play */
+    const ramp = Math.min(1, g.t / 9000);
+    g.level = 1 + Math.floor(ramp * 5);
+    g.spd = 2.0 + ramp * 2.3;
+    const gapMax = 42 - ramp * 20, gapMin = 26 - ramp * 13;
+    g.notes.push({d: rndi(4), t: g.nextT, hit:0});
+    /* doubles and triples creep in as it speeds up */
+    if (Math.random() < ramp * 0.30) g.notes.push({d: rndi(4), t: g.nextT + 8, hit:0});
+    g.nextT += rnd(gapMax, gapMin);
   },
   update(){
     const g = this.s;
@@ -3728,12 +4138,20 @@ Object.assign(GAMES.sync, {
     g.t++;
     if (g.judgeT>0) g.judgeT--;
     if (g.hitFx>0) g.hitFx--;
+    if (g.msgT>0) g.msgT--;
     if (g.over){ if (--g.over <= 0) this.done(); Particles.update(); return; }
-    if (g.t > g.endT){ g.over = 70; Audio_.sfx('perfect'); }
+    while (g.nextT < g.t + 260) this.spawn();
+    const prevLevel = g.level;
     /* missed notes */
     for (const n of g.notes){
-      if (!n.hit && g.t > n.t + 12){ n.hit = -1; g.miss++; g.combo = 0; g.judge='MISS'; g.judgeT=26; Audio_.sfx('fail'); }
+      if (!n.hit && g.t > n.t + 12){
+        n.hit = -1; g.miss++; g.combo = 0; g.judge='MISS'; g.judgeT=26; Audio_.sfx('fail');
+        if (g.miss >= SYNC_MAX_MISS){ g.over = 70; Audio_.sfx('fail'); shake(); }
+        else if (g.miss === SYNC_MAX_MISS - 3){ g.msg = 'THREE LEFT!'; g.msgT = 80; }
+      }
     }
+    if (g.level > prevLevel){ g.msg = 'TEMPO UP - LEVEL ' + g.level; g.msgT = 90; Audio_.sfx('levelup'); }
+    while (g.notes.length && g.notes[0].hit && g.notes[0].t < g.t - 40) g.notes.shift();
     let pressed = null;
     SYNC_DIRS.forEach(d=>{ if (Input.hit(d)) pressed = d; });
     if (Input.ptr.tapped){
@@ -3749,11 +4167,18 @@ Object.assign(GAMES.sync, {
         if (bestN.d === di){
           const perfect = bd <= 4;
           bestN.hit = 1; g.combo++; g.best = Math.max(g.best, g.combo);
-          if (perfect){ g.perfect++; g.score += 100 + g.combo*4; g.judge='PERFECT'; Audio_.sfx('perfect'); }
-          else { g.good++; g.score += 55 + g.combo*2; g.judge='GOOD'; Audio_.sfx('good'); }
+          /* streak multiplier grows the longer you hold on, and a miss resets it */
+          const mult = 1 + Math.min(4, g.combo / 12);
+          if (perfect){ g.perfect++; g.score += Math.round((60 + g.level*14) * mult); g.judge='PERFECT'; Audio_.sfx('perfect'); }
+          else { g.good++; g.score += Math.round((30 + g.level*7) * mult); g.judge='GOOD'; Audio_.sfx('good'); }
+          if (g.combo && g.combo % 25 === 0){ g.msg = g.combo + ' STREAK! x' + mult.toFixed(1); g.msgT = 90;
+            Particles.burst(44, 80, '#ffd166', 14, 2.4, 'star'); }
           g.judgeT = 26; g.hitFx = 8;
           Particles.burst(44, 50 + di*24, perfect?'#ffd166':'#7bffe0', 5, 1.6, perfect?'star':'plus');
-        } else { bestN.hit = -1; g.miss++; g.combo = 0; g.judge='WRONG WAY'; g.judgeT=26; Audio_.sfx('fail'); }
+        } else {
+          bestN.hit = -1; g.miss++; g.combo = 0; g.judge='WRONG WAY'; g.judgeT=26; Audio_.sfx('fail');
+          if (g.miss >= SYNC_MAX_MISS){ g.over = 70; shake(); }
+        }
       }
     }
     Particles.update();
@@ -3762,11 +4187,11 @@ Object.assign(GAMES.sync, {
     const g = this.s;
     const total = g.perfect + g.good + g.miss || 1;
     const acc = (g.perfect + g.good*0.6)/total;
-    const grade = acc > 0.95 ? 'S' : acc > 0.85 ? 'A' : acc > 0.7 ? 'B' : acc > 0.5 ? 'C' : 'D';
-    finishGame({score:g.score, fish:g.score*0.24, xp:g.score/14,
-      rolls: 1 + (acc>0.7?1:0) + (acc>0.92?1:0), luck: acc*0.1, win: acc > 0.7,
+    const grade = g.best >= 120 ? 'S' : g.best >= 80 ? 'A' : g.best >= 45 ? 'B' : g.best >= 20 ? 'C' : 'D';
+    finishGame({score:g.score, fish:g.score*0.20, xp:g.score/16,
+      rolls: 1 + Math.floor(g.best/35) + (g.level>=5?1:0), luck: acc*0.1, win: g.best >= 45,
       title:'ROUTINE GRADE ' + grade,
-      note: g.perfect+' PERFECT  '+g.good+' GOOD  '+g.miss+' MISS  -  x'+g.best});
+      note: 'BEST STREAK ' + g.best + ' - LV' + g.level});
   },
   draw(c){
     const g = this.s;
@@ -3794,18 +4219,29 @@ Object.assign(GAMES.sync, {
     /* notes */
     for (const n of g.notes){
       if (n.hit) continue;
-      const x = 40 + (n.t - g.t) * 2.6;
+      const x = 40 + (n.t - g.t) * g.spd;
       if (x < -12 || x > VW+12) continue;
       this.arrow(c, x, 46 + n.d*24, n.d, ['#ff5c7a','#4fd6ff','#5be584','#ffd166'][n.d]);
     }
     Particles.draw(c);
     drawSeal(c, 6, 108, playerLook({facing:1, frame:(g.t/6|0)%2, pose:'swim'}));
-    gameHUD(c, {left:'COMBO '+g.combo, right:fmt(g.score), mid:'P'+g.perfect+' G'+g.good+' M'+g.miss});
+    gameHUD(c, {left:'STREAK '+g.combo, right:fmt(g.score), mid:'LV '+g.level,
+                leftCol: g.combo>=25 ? '#ffd166' : '#ffffff'});
+    /* lives left, as remaining misses */
+    const left = SYNC_MAX_MISS - g.miss;
+    for (let i=0;i<SYNC_MAX_MISS;i++){
+      c.fillStyle = i < left ? (left <= 3 ? '#ff5c7a' : '#7bffe0') : '#2a3768';
+      c.fillRect(3 + i*7, 152, 5, 5);
+    }
+    drawText(c, 'MISSES LEFT', 3, 144, left<=3 ? '#ff5c7a' : '#6f86b8', 1, '#0d1024');
     if (g.judgeT > 0) drawTextC(c, g.judge, VW/2, 130,
       g.judge==='PERFECT'?'#ffd166':g.judge==='GOOD'?'#7bffe0':'#ff5c7a', 2, '#0d1024');
-    const prog = clamp(g.t/g.endT,0,1);
-    c.fillStyle='#2a3768'; c.fillRect(0,VH-4,VW,4); c.fillStyle='#7bffe0'; c.fillRect(0,VH-4,VW*prog,4);
-    if (g.over) bigMsg(c, 'ENCORE!', g.perfect + ' PERFECT');
+    if (g.msgT > 0) drawTextC(c, g.msg, VW/2, 16, '#ffd166', 1, '#0d1024');
+    if (g.combo >= 12){
+      const mult = 1 + Math.min(4, g.combo/12);
+      drawText(c, 'x'+mult.toFixed(1), VW-30, 144, '#ffd166', 1, '#0d1024');
+    }
+    if (g.over) bigMsg(c, 'ROUTINE OVER', 'BEST STREAK ' + g.best);
   },
   arrow(c, x, y, d, col){
     /* solid triangle head plus a stem, so direction reads at a glance */
@@ -3837,36 +4273,43 @@ Object.assign(GAMES.balance, {
     if (quitCheck()) return;
     g.t++; if (g.msgT>0) g.msgT--;
     if (g.over){ if (--g.over <= 0) this.done(); Particles.update(); return; }
-    g.score += 1; g.w = Math.max(30, 88 - g.t/90);
+    g.score += 1; g.w = Math.max(30, 88 - g.t/130);
     const grip = 1 - State.gear.grip*0.09;
     let mv = 0;
     if (Input.key('left')) mv -= 1; if (Input.key('right')) mv += 1;
     if (Input.ptr.down) mv = Input.ptr.x < VW/2 ? -1 : 1;
-    g.px = clamp(g.px + mv*1.25, -g.w+8, g.w-8);
-    /* slide downhill */
-    g.px = clamp(g.px + Math.sin(g.a)*2.6*grip, -g.w+8, g.w-8);
-    /* torque */
-    let torque = (g.px/g.w) * 0.0021;
-    for (const gu of g.gulls) torque += (gu.x/g.w) * 0.0016;
+    /* Where you stand sets the tilt the berg WANTS to sit at, and it springs
+       toward that. Driving the angle directly (rather than its acceleration)
+       is what makes leaning feel like control instead of a fight. */
+    g.px = clamp(g.px + mv*2.1, -g.w+8, g.w-8);
+    g.px = clamp(g.px + Math.sin(g.a)*0.22*grip, -g.w+8, g.w-8);
+    /* landed gulls are dead weight you have to stand against */
+    let gullLoad = 0;
+    for (const gu of g.gulls) if (gu.y >= 0) gullLoad += (gu.x/g.w) * 0.42;
+    const target = (g.px/g.w) * 0.65 + gullLoad + Math.sin(g.t/64)*0.02;
+    /* swells shove the berg, and grow through the run */
+    const ramp = 1 + g.t/1900;
     g.waveT--;
     if (g.waveT <= 0){
-      g.waveT = rnd(150,70);
-      const push = rnd(0.05,0.02) * (chance(0.5)?1:-1);
+      g.waveT = rnd(260,150);
+      const push = rnd(0.026*ramp, 0.013*ramp) * (chance(0.5)?1:-1);
       g.av += push; g.msg = 'SWELL!'; g.msgT = 40; Audio_.sfx('wave');
     }
-    torque += Math.sin(g.t/64)*0.0006;
-    g.av += torque; g.av *= 0.982; g.a += g.av;
-    /* gulls land and add weight */
-    if (chance(0.006) && g.gulls.length < 4){
+    g.av += (target - g.a) * 0.014;
+    g.av *= 0.92;
+    g.a = clamp(g.a + g.av, -1.2, 1.2);
+    /* gulls land more often the longer you last */
+    if (chance(0.0028 * (1 + g.t/1600)) && g.gulls.length < 5){
       g.gulls.push({x: rnd(g.w-10,-(g.w-10)), y:-40, land:0, wob:rnd(6.28)});
       g.msg = 'GULL INBOUND'; g.msgT = 40;
     }
     for (let i=g.gulls.length-1;i>=0;i--){
       const gu = g.gulls[i];
       if (gu.y < 0){ gu.y += 1.6; }
-      else { gu.land++; if (gu.land > 240 || Math.abs(g.a) > 0.35){ g.gulls.splice(i,1); continue; } }
+      else { gu.land++; if (gu.land > 300 || Math.abs(g.a) > 0.55){ g.gulls.splice(i,1); continue; } }
     }
-    if (Math.abs(g.a) > 0.62){ g.over = 60; Audio_.sfx('fail'); shake(); }
+    if (Math.abs(g.a) > 0.82){ g.over = 60; Audio_.sfx('fail'); shake(); }
+    else if (Math.abs(g.a) > 0.60 && g.t % 18 === 0){ g.msg = 'LEAN BACK!'; g.msgT = 24; }
     if (State.equipped.trail && g.t%6===0) Particles.spawnTrail(State.equipped.trail, 120+g.px, 100, 0, 0);
     Particles.update();
   },
@@ -3904,7 +4347,7 @@ Object.assign(GAMES.balance, {
     c.restore();
     Particles.draw(c);
     /* tilt meter */
-    const tilt = clamp(g.a/0.62, -1, 1);
+    const tilt = clamp(g.a/0.82, -1, 1);
     c.fillStyle = '#0d1024'; c.fillRect(60, 18, 120, 8);
     c.fillStyle = '#2a3768'; c.fillRect(62, 20, 116, 4);
     c.fillStyle = '#5be584'; c.fillRect(112, 20, 16, 4);
@@ -3924,7 +4367,8 @@ Object.assign(GAMES.balance, {
 Object.assign(GAMES.gull, {
   start(){
     this.s = {x:110, face:1, t:0, time:55*60, gulls:[], piles:[{x:60,n:12},{x:120,n:12},{x:180,n:12}],
-      swat:0, swatCd:0, hits:0, lost:0, decoy:null, decoyCd:0, over:0, msg:'', msgT:0, spawn:70};
+      swat:0, swatCd:0, hits:0, lost:0, decoy:null, decoyCd:0, over:0, msg:'', msgT:0, spawn:70,
+      golden:0, radiant:0, radiantSeen:0};
   },
   totalFish(){ return this.s.piles.reduce((a,p)=>a+p.n,0); },
   update(){
@@ -3942,10 +4386,22 @@ Object.assign(GAMES.gull, {
     if ((Input.hit('a') || Input.ptr.tapped) && g.swatCd <= 0){
       g.swat = 10; g.swatCd = 16; Audio_.sfx('swat');
       for (const gu of g.gulls){
+        if (gu.dead) continue;
         if (dist(gu.x, gu.y, g.x+12 + g.face*10, g.y0||96) < 30){
           if (gu.carry){ this.dropFish(gu); }
+          gu.hp--;
+          if (gu.hp > 0){                       /* the radiant gull takes two hits */
+            Particles.burst(gu.x, gu.y, '#fff3b0', 8, 2.2, 'star');
+            gu.x += (gu.x < 120 ? -18 : 18); Audio_.sfx('hit');
+            continue;
+          }
           gu.dead = 26; g.hits++;
-          Particles.burst(gu.x, gu.y, '#ffffff', 6, 1.8, 'plus');
+          if (gu.kind === 'radiant'){
+            g.radiant++; g.msg = 'RADIANT GULL DOWN!'; g.msgT = 150;
+            Particles.burst(gu.x, gu.y, '#ffd166', 26, 3, 'star'); Audio_.sfx('legend'); shake();
+          } else if (gu.kind === 'golden'){
+            g.golden++; Particles.burst(gu.x, gu.y, '#ffd166', 10, 2.2, 'star'); Audio_.sfx('coin');
+          } else Particles.burst(gu.x, gu.y, '#ffffff', 6, 1.8, 'plus');
         }
       }
     }
@@ -3956,7 +4412,13 @@ Object.assign(GAMES.gull, {
     if (g.spawn <= 0){
       g.spawn = Math.max(22, 78 - g.t/22);
       const side = chance(0.5) ? -14 : VW+14;
-      g.gulls.push({x:side, y:rnd(50,16), tx:0, ty:0, carry:0, dead:0, sp:rnd(1.4,.8), wob:rnd(6.28), state:'in'});
+      let kind = 'gull';
+      if (!g.radiantSeen && g.t > 400 && chance(1/340)){ kind = 'radiant'; g.radiantSeen = 1;
+        g.msg = 'A RADIANT GULL!'; g.msgT = 140; Audio_.sfx('perfect'); }
+      else if (chance(0.11)) kind = 'golden';
+      g.gulls.push({x:side, y:rnd(50,16), kind:kind, carry:0, dead:0,
+        sp: kind==='radiant' ? 1.9 : kind==='golden' ? rnd(1.7,1.1) : rnd(1.4,.8),
+        hp: kind==='radiant' ? 2 : 1, wob:rnd(6.28), state:'in'});
     }
     for (let i=g.gulls.length-1;i>=0;i--){
       const gu = g.gulls[i];
@@ -3972,19 +4434,23 @@ Object.assign(GAMES.gull, {
       const a = Math.atan2(ty-gu.y, tx-gu.x);
       gu.x += Math.cos(a)*gu.sp; gu.y += Math.sin(a)*gu.sp + Math.sin(g.t/8+gu.wob)*0.2;
       if (!gu.carry && gu.y > 98 && gu.pile && gu.pile.n > 0 && Math.abs(gu.x - gu.pile.x) < 10){
-        gu.pile.n--; gu.carry = 1; Audio_.sfx('blip'); g.msg = 'THIEF!'; g.msgT = 30;
+        /* golden and radiant gulls make off with two fish at a time */
+        const take = (gu.kind === 'gull') ? 1 : 2;
+        const got = Math.min(take, gu.pile.n);
+        gu.pile.n -= got; gu.carry = got;
+        Audio_.sfx('blip'); g.msg = got > 1 ? 'IT TOOK TWO!' : 'THIEF!'; g.msgT = 34;
         Particles.burst(gu.x, gu.y, '#ffd166', 3, 1, 'sq');
       }
-      if (gu.carry && (gu.y < -18 || gu.x < -28 || gu.x > VW+28)){ g.lost++; g.gulls.splice(i,1); }
+      if (gu.carry && (gu.y < -18 || gu.x < -28 || gu.x > VW+28)){ g.lost += gu.carry; g.gulls.splice(i,1); }
       else if (!gu.carry && (gu.x < -30 || gu.x > VW+30) && gu.state === 'out') g.gulls.splice(i,1);
     }
     Particles.update();
   },
   dropFish(gu){
     const g = this.s;
-    gu.carry = 0;
+    const back = gu.carry; gu.carry = 0;
     const p = g.piles.reduce((a,b)=> a.n <= b.n ? a : b);
-    p.n++;
+    p.n += back;
     Particles.burst(gu.x, gu.y, '#ffd166', 4, 1.4, 'sq');
   },
   done(){
@@ -3992,10 +4458,19 @@ Object.assign(GAMES.gull, {
     const saved = this.totalFish();
     const win = saved >= 18;
     if (win) recordWin('gull');
-    const score = saved*22 + g.hits*14;
-    finishGame({score:score, fish:score*0.4, xp:score/9, rolls:1 + Math.floor(saved/12) + (win?1:0),
-      luck:saved*0.004, win:win, title: win ? 'STASH DEFENDED' : 'STASH RAIDED',
-      note: saved + ' FISH LEFT - ' + g.hits + ' GULLS SWATTED - ' + g.lost + ' STOLEN'});
+    let bonusFish = 0, title = win ? 'STASH DEFENDED' : 'STASH RAIDED';
+    let note = saved + ' LEFT - ' + g.hits + ' SWATTED';
+    if (g.radiant){
+      const first = !State.owned['head_gildedplume'];
+      State.stats.gilded = (State.stats.gilded||0) + 1;
+      if (!first) bonusFish = 900;
+      note = first ? 'RADIANT GULL DOWNED!' : 'RADIANT GULL - BONUS FISH!';
+      title = 'RADIANT CATCH';
+    }
+    const score = saved*22 + g.hits*14 + g.golden*45 + (g.radiant?1000:0);
+    finishGame({score:score, fish:score*0.4 + bonusFish, xp:score/9 + (g.radiant?60:0),
+      rolls:1 + Math.floor(saved/12) + (win?1:0) + (g.radiant?2:0),
+      luck:saved*0.004 + (g.radiant?0.3:0), win:win || g.radiant>0, title:title, note:note});
   },
   draw(c){
     const g = this.s;
@@ -4019,13 +4494,23 @@ Object.assign(GAMES.gull, {
     /* gulls */
     for (const gu of g.gulls){
       const x = gu.x|0, y = gu.y|0, fl = (g.t/5|0)%2, dead = gu.dead>0;
-      c.fillStyle = dead ? '#ff9ecb' : '#f6fbff'; c.fillRect(x-5, y, 10, 6);
-      c.fillStyle = dead ? '#ff9ecb' : '#e6eef7';
+      const rad = gu.kind === 'radiant', gold = gu.kind === 'golden';
+      if (rad && !State.opt.noflash){
+        c.globalAlpha = 0.20 + 0.12*Math.sin(g.t/5); c.fillStyle = '#ffd166';
+        c.fillRect(x-16, y-10, 32, 26); c.globalAlpha = 1;
+      }
+      const body = dead ? '#ff9ecb' : rad ? ((g.t/4|0)%2 ? '#fff8d0' : '#ffe9a8') : gold ? '#ffd166' : '#f6fbff';
+      const wing = dead ? '#ff9ecb' : rad ? '#ffd166' : gold ? '#e0a05a' : '#e6eef7';
+      c.fillStyle = body; c.fillRect(x-5, y, 10, 6);
+      c.fillStyle = wing;
       c.fillRect(x-11, y+(fl?-3:3), 7, 2); c.fillRect(x+4, y+(fl?-3:3), 7, 2);
-      c.fillStyle = '#ffd166'; c.fillRect(x+5, y+2, 4, 2);
+      c.fillStyle = rad ? '#ff9ecb' : '#ffd166'; c.fillRect(x+5, y+2, 4, 2);
       c.fillStyle = '#0d1024'; c.fillRect(x+2, y+1, 1, 1);
       c.fillStyle = '#8fa3b8'; c.fillRect(x-2, y+6, 1, 2); c.fillRect(x+1, y+6, 1, 2);
-      if (gu.carry){ c.fillStyle='#4fd6ff'; c.fillRect(x-2, y+7, 5, 3); }
+      if (rad){ c.fillStyle = '#ffffff'; c.fillRect(x-1, y-3, 2, 2); c.fillRect(x-3, y-2, 1, 1); c.fillRect(x+2, y-2, 1, 1); }
+      if (gu.hp > 1){ c.fillStyle = '#ffffff'; c.fillRect(x-5, y-6, 10, 1); c.fillStyle = '#ff5c7a'; c.fillRect(x-5, y-6, 5, 1); }
+      if (gu.carry){ c.fillStyle='#4fd6ff';
+        for (let k=0;k<gu.carry;k++) c.fillRect(x-3+k*5, y+7, 4, 3); }
     }
     Particles.draw(c);
     g.y0 = 96;
@@ -4045,125 +4530,199 @@ Object.assign(GAMES.gull, {
 });
 
 /* ============================================================
-   28. DEEP DIVE - one breath, straight down
+   28. DEEP DIVE - a breath-hold round trip through a trench
+   You fly a narrowing cave, not a field of floating objects. Depth
+   only counts once you make it back to the surface, so the whole
+   game is judging when to turn around. Currents shove, the walls
+   tighten, and the air only goes one way.
    ============================================================ */
+const DIVE_SEG = 8;                 /* world pixels per terrain sample */
 Object.assign(GAMES.dive, {
   start(){
     const maxO = 100 * (1 + State.gear.lungs*0.10);
-    this.s = {x:112, depth:0, vy:1.15, t:0, o2:maxO, maxO:maxO, ents:[], over:0, hurt:0,
-      loot:0, msg:'', msgT:0, spawn:0, best:0, rising:0};
+    this.s = {
+      x:120, vx:0, y:44, depth:0, vy:0, t:0, o2:maxO, maxO:maxO,
+      wall:[], base:0, over:0, hurt:0, phase:'down', turn:0,
+      pearls:0, msg:'DIVE - B TO SINK, UP TO RISE', msgT:110,
+      best:0, scrape:0, banked:false, current:0, curT:120, glows:[]
+    };
+    /* seed the trench profile */
+    for (let i=0;i<40;i++) this.pushSeg();
   },
+  /* the cave is a centre line plus a half-width, both drifting */
+  pushSeg(){
+    const g = this.s;
+    const i = g.wall.length;
+    const d = i * DIVE_SEG;                       /* depth of this sample */
+    const tight = clamp(d/5200, 0, 1);
+    const half = 62 - tight*40 + Math.sin(i/7)*7 + Math.sin(i/2.7)*4;
+    const mid = 120 + Math.sin(i/9)*34 + Math.sin(i/3.3)*14 + Math.sin(i/23)*24;
+    g.wall.push({mid: clamp(mid, 40, 200), half: Math.max(15, half)});
+    /* glowing pockets to graze for oxygen, denser deeper */
+    if (i > 6 && Math.random() < 0.18 + tight*0.12)
+      g.glows.push({i:i, x: clamp(mid + rnd(half*1.2, -half*1.2), 14, VW-14), taken:0,
+                    kind: Math.random() < 0.22 + tight*0.2 ? 'pearl' : 'air'});
+  },
+  sampleAt(depth){
+    const g = this.s;
+    const i = depth / DIVE_SEG;
+    const i0 = Math.max(0, Math.floor(i)), i1 = i0+1;
+    while (g.wall.length <= i1 + 4) this.pushSeg();
+    const a = g.wall[i0], b = g.wall[i1] || a, f = i - i0;
+    return {mid: lerp(a.mid, b.mid, f), half: lerp(a.half, b.half, f)};
+  },
+  meters(){ return Math.floor(this.s.depth/4); },
   update(){
     const g = this.s;
     if (quitCheck()) return;
-    g.t++; if (g.msgT>0) g.msgT--; if (g.hurt>0) g.hurt--;
+    g.t++;
+    if (g.msgT>0) g.msgT--;
+    if (g.hurt>0) g.hurt--;
+    if (g.scrape>0) g.scrape--;
     if (g.over){ if (--g.over <= 0) this.done(); Particles.update(); return; }
-    const sp = 1.35 + State.gear.speed*0.05;
+
+    /* steering */
     let mx = 0;
-    if (Input.key('left')) mx -= 1; if (Input.key('right')) mx += 1;
-    if (Input.ptr.down){ const d = Input.ptr.x - (g.x+12); if (Math.abs(d) > 5) mx = d>0?1:-1; }
-    g.x = clamp(g.x + mx*sp, 4, VW-28);
-    const fast = Input.key('b') || Input.key('down');
-    g.vy = fast ? 2.5 : 1.15;
-    if (Input.key('up')) g.vy = 0.45;
-    g.depth += g.vy;
-    g.o2 -= 0.055 + g.depth/260000 + (fast?0.02:0);
-    if (g.o2 <= 0){ g.o2 = 0; g.over = 70; Audio_.sfx('fail'); }
-    if (State.equipped.trail && g.t%3===0) Particles.spawnTrail(State.equipped.trail, g.x+12, 44, 0, -1);
-    /* spawn field */
-    g.spawn--;
-    if (g.spawn <= 0){
-      g.spawn = Math.max(11, 30 - g.depth/400);
-      const r = Math.random(), m = this.meters();
-      if (r < 0.30) g.ents.push({t:'bubble', x:rnd(VW-16,8), y:VH+10, r:5});
-      else if (r < 0.76) g.ents.push({t:'jelly', x:rnd(VW-20,8), y:VH+10, r:7, a:rnd(6.28), sp:rnd(.7,.2)});
-      else if (r < 0.90) g.ents.push({t:'urchin', x:rnd(VW-20,8), y:VH+10, r:7});
-      else g.ents.push({t:'chest', x:rnd(VW-24,8), y:VH+10, r:8, deep:m});
+    if (Input.key('left')) mx -= 1;
+    if (Input.key('right')) mx += 1;
+    const st = Stick.read();
+    if (st) mx = st.x;
+    else if (Input.ptr.down){ const d = Input.ptr.x - g.x; if (Math.abs(d) > 4) mx = clamp(d/30,-1,1); }
+    /* momentum, so the trench has to be flown rather than nudged */
+    g.vx += mx * 0.42;
+    g.vx *= 0.90;
+    /* side currents push harder the deeper you are */
+    g.curT--;
+    if (g.curT <= 0){ g.curT = rnd(200,90); g.current = rnd(0.5,-0.5) * (0.4 + this.meters()/900);
+      if (Math.abs(g.current) > 0.25){ g.msg = g.current>0 ? 'CURRENT PUSHING RIGHT' : 'CURRENT PUSHING LEFT'; g.msgT = 60; } }
+    g.vx += g.current * 0.16;
+    g.x = clamp(g.x + g.vx, 8, VW-8);
+
+    /* vertical: down by default, up when you ask */
+    const sinking = Input.key('b') || Input.key('down');
+    const rising  = Input.key('up');
+    if (rising){ g.phase = 'up'; g.vy = -1.75 - State.gear.speed*0.05; }
+    else if (sinking){ g.phase = 'down'; g.vy = 2.45; }
+    else { g.vy = g.phase === 'up' ? -1.15 : 1.15; }
+    g.depth = Math.max(0, g.depth + g.vy);
+    g.best = Math.max(g.best, this.meters());
+
+    /* air: rising costs less than sinking, and depth costs more */
+    const m = this.meters();
+    g.o2 -= 0.048 + m/26000 + (sinking?0.022:0) + (rising?0.006:0);
+
+    /* surfaced with air left: the run banks */
+    if (g.depth <= 2 && g.t > 60){
+      if (g.best > 0){ g.banked = true; g.over = 70; Audio_.sfx('legend'); g.msg = 'SURFACED!'; g.msgT = 70; }
     }
-    const mag = 4 + State.gear.magnet*3;
-    for (let i=g.ents.length-1;i>=0;i--){
-      const e = g.ents[i];
-      e.y -= g.vy;
-      if (e.t === 'jelly'){ e.x += Math.sin(g.t/30 + e.a)*e.sp; e.y -= Math.sin(g.t/22+e.a)*0.2; }
-      if (e.y < -20){ g.ents.splice(i,1); continue; }
-      const d = dist(e.x, e.y, g.x+12, 46);
-      if (e.t === 'bubble' && d < 14 + mag){ e.x += (g.x+12-e.x)*0.15; e.y += (46-e.y)*0.15; }
-      if (d < 13){
-        if (e.t === 'bubble'){ g.o2 = Math.min(g.maxO, g.o2 + 13); Audio_.sfx('bubble');
-          Particles.burst(e.x,e.y,'#9ee5ff',4,1.2,'ring'); g.ents.splice(i,1); }
-        else if (e.t === 'chest'){ g.loot++; Audio_.sfx('perfect'); g.msg='DEEP CACHE!'; g.msgT=50;
-          Particles.burst(e.x,e.y,'#ffd166',10,2,'star'); g.ents.splice(i,1); }
-        else if (g.hurt <= 0){
-          g.o2 -= 16; g.hurt = 60; Audio_.sfx('hurt'); shake();
-          Particles.burst(g.x+12,46,'#ff5c7a',7,1.8,'sq');
-          g.msg = e.t==='jelly' ? 'STUNG!' : 'SPIKED!'; g.msgT = 40;
-        }
+    if (g.o2 <= 0){ g.o2 = 0; g.over = 80; g.banked = false; Audio_.sfx('fail'); }
+
+    /* walls */
+    const s = this.sampleAt(g.depth);
+    const left = s.mid - s.half, right = s.mid + s.half;
+    if (g.x < left + 5 || g.x > right - 5){
+      g.x = clamp(g.x, left + 5, right - 5);
+      g.vx *= -0.35;
+      if (g.scrape <= 0){
+        g.scrape = 26; g.o2 -= 5; Audio_.sfx('hit'); shake();
+        Particles.burst(g.x, 46, '#ff9ecb', 6, 1.8, 'sq');
+        g.msg = 'SCRAPED THE WALL'; g.msgT = 45;
       }
     }
+    /* pickups: only reachable by flying close to them */
+    for (const p of g.glows){
+      if (p.taken) continue;
+      const py = 46 + (p.i*DIVE_SEG - g.depth);
+      if (py < -20 || py > VH+20) continue;
+      if (Math.abs(p.x - g.x) < 11 && Math.abs(py - 46) < 11){
+        p.taken = 1;
+        if (p.kind === 'pearl'){ g.pearls++; Audio_.sfx('perfect');
+          Particles.burst(p.x, py, '#ffd166', 12, 2.2, 'star'); g.msg = 'DEEP PEARL!'; g.msgT = 60; }
+        else { g.o2 = Math.min(g.maxO, g.o2 + 15); Audio_.sfx('bubble');
+          Particles.burst(p.x, py, '#9ee5ff', 6, 1.4, 'ring'); }
+      }
+    }
+    if (State.equipped.trail && g.t%3===0) Particles.spawnTrail(State.equipped.trail, g.x, 46, 0, g.vy>0?-1:1);
     Particles.update();
   },
-  meters(){ return Math.floor(this.s.depth/4); },
   done(){
-    const g = this.s, m = this.meters();
+    const g = this.s;
+    /* only banked depth counts - that is the whole tension */
+    const m = g.banked ? g.best : Math.floor(g.best * 0.35);
     State.stats.deepest = Math.max(State.stats.deepest||0, m);
-    finishGame({score:m, fish: m*0.7 + g.loot*40, xp: m/5, rolls: 1 + g.loot + Math.floor(m/450),
-      luck: 0.04*g.loot + m/9000, win: m >= 600, title: m>=900 ? 'ABYSS REACHED' : 'SURFACED',
-      note: m + 'M DEEP' + (g.loot? '  -  ' + g.loot + ' CACHES':'')});
+    finishGame({score:m, fish: m*0.75 + g.pearls*55, xp: m/4.5,
+      rolls: 1 + g.pearls + Math.floor(m/420),
+      luck: 0.04*g.pearls + m/9000, win: g.banked && m >= 450,
+      title: g.banked ? (m>=900 ? 'ABYSS AND BACK' : 'SURFACED SAFELY') : 'BLACKED OUT',
+      note: g.banked ? m+'M BANKED' : 'REACHED '+g.best+'M, LOST MOST'});
   },
   draw(c){
     const g = this.s, m = this.meters();
-    const dark = clamp(m/900, 0, 1);
+    const dark = clamp(m/950, 0, 1);
     const grd = c.createLinearGradient(0,0,0,VH);
-    grd.addColorStop(0, `rgb(${(26*(1-dark))|0},${(74*(1-dark)+8)|0},${(138*(1-dark)+24)|0})`);
-    grd.addColorStop(1, `rgb(${(4*(1-dark))|0},${(18*(1-dark))|0},${(44*(1-dark)+8)|0})`);
+    grd.addColorStop(0, `rgb(${(20*(1-dark))|0},${(70*(1-dark)+6)|0},${(130*(1-dark)+20)|0})`);
+    grd.addColorStop(1, `rgb(${(3*(1-dark))|0},${(14*(1-dark))|0},${(38*(1-dark)+6)|0})`);
     c.fillStyle = grd; c.fillRect(0,0,VW,VH);
-    /* passing motes for a sense of speed */
-    for (let i=0;i<30;i++){
-      const y = ((i*53 - g.depth*1.4) % (VH+20) + VH+20) % (VH+20) - 10;
-      c.fillStyle = 'rgba(255,255,255,.18)';
-      c.fillRect((i*37)%VW, y, 1, 2);
+
+    /* trench walls, drawn per screen row */
+    for (let y=0;y<VH;y++){
+      const d = g.depth + (y - 46);
+      if (d < 0){ c.fillStyle = '#cfe9ff'; c.fillRect(0, y, VW, 1); continue; }
+      const s = this.sampleAt(d);
+      const l = Math.max(0, (s.mid - s.half)|0), r = Math.min(VW, (s.mid + s.half)|0);
+      const shade = 26 + (y%3)*5 + dark*8;
+      c.fillStyle = `rgb(${(38-shade*0.4)|0},${(54-shade*0.4)|0},${(84-shade*0.5)|0})`;
+      c.fillRect(0, y, l, 1); c.fillRect(r, y, VW-r, 1);
+      c.fillStyle = `rgb(${(70-dark*40)|0},${(96-dark*50)|0},${(140-dark*70)|0})`;
+      c.fillRect(l-2, y, 2, 1); c.fillRect(r, y, 2, 1);
     }
-    for (const e of g.ents){
-      const x = e.x|0, y = e.y|0;
-      if (e.t === 'bubble'){
-        c.fillStyle = 'rgba(158,229,255,.85)';
-        c.fillRect(x-3,y-4,6,1); c.fillRect(x-4,y-3,8,6); c.fillRect(x-3,y+3,6,1);
-        c.fillStyle = '#ffffff'; c.fillRect(x-2,y-2,2,2);
-      } else if (e.t === 'jelly'){
-        const pulse = (g.t/10|0)%2;
-        c.fillStyle = '#d79aff'; c.fillRect(x-6,y-4,12,6); c.fillRect(x-4,y-6,8,2);
-        c.fillStyle = '#b06bff';
-        for (let i=0;i<4;i++) c.fillRect(x-5+i*3, y+2, 1, 5+pulse*2+((i*3)%3));
-        c.fillStyle = '#f2d9ff'; c.fillRect(x-3,y-3,3,2);
-      } else if (e.t === 'urchin'){
-        c.fillStyle = '#2a1a3a'; c.fillRect(x-5,y-5,10,10);
-        c.fillStyle = '#5a2a6a';
-        c.fillRect(x-8,y-1,16,2); c.fillRect(x-1,y-8,2,16);
-        c.fillRect(x-6,y-6,3,3); c.fillRect(x+3,y+3,3,3); c.fillRect(x-6,y+3,3,3); c.fillRect(x+3,y-6,3,3);
+    /* pickups */
+    for (const p of g.glows){
+      if (p.taken) continue;
+      const py = 46 + (p.i*DIVE_SEG - g.depth);
+      if (py < -12 || py > VH+12) continue;
+      const pulse = (g.t/7|0)%2;
+      if (p.kind === 'pearl'){
+        if (!State.opt.noflash){ c.globalAlpha = 0.16; c.fillStyle = '#ffd166';
+          c.fillRect(p.x-9, py-9, 18, 18); c.globalAlpha = 1; }
+        c.fillStyle = pulse ? '#fff3b0' : '#ffd166'; c.fillRect(p.x-4, py-4, 8, 8);
+        c.fillStyle = '#ffffff'; c.fillRect(p.x-2, py-3, 2, 2);
       } else {
-        const glow = (g.t/8|0)%2;
-        c.fillStyle = glow ? '#ffd166' : '#e0a05a'; c.fillRect(x-7,y-5,14,10);
-        c.fillStyle = '#8a5a34'; c.fillRect(x-7,y-1,14,2); c.fillRect(x-2,y-5,4,10);
-        c.fillStyle = '#fff3b0'; c.fillRect(x-6,y-4,3,2);
+        c.fillStyle = 'rgba(158,229,255,.9)';
+        c.fillRect(p.x-3, py-4, 6, 1); c.fillRect(p.x-4, py-3, 8, 6); c.fillRect(p.x-3, py+3, 6, 1);
+        c.fillStyle = '#ffffff'; c.fillRect(p.x-2, py-2, 2, 2);
       }
     }
     Particles.draw(c);
+    /* the seal, nose down or nose up */
     if (!(g.hurt>0 && (g.t/4|0)%2)){
-      const o = playerLook({facing:1, frame:(g.t/7|0)%2, pose:'swim', rot:1.1});
-      drawSeal(c, g.x, 40, o);
+      const o = playerLook({facing:1, frame:(g.t/7|0)%2, pose:'swim',
+                            rot: g.phase==='up' ? -1.1 : 1.1});
+      drawSeal(c, g.x-12, 40, o);
     }
-    /* oxygen */
-    c.fillStyle = 'rgba(13,16,36,.7)'; c.fillRect(0,0,VW,11);
-    c.fillStyle = '#0d2a3a'; c.fillRect(30,3,120,5);
+    Stick.draw(c);
+
+    /* HUD */
+    c.fillStyle = 'rgba(13,16,36,.72)'; c.fillRect(0,0,VW,11);
+    c.fillStyle = '#0d2a3a'; c.fillRect(30,3,110,5);
     const o2p = g.o2/g.maxO;
     c.fillStyle = o2p > 0.5 ? '#4fd6ff' : o2p > 0.22 ? '#ffd166' : ((g.t/6|0)%2 ? '#ff5c7a':'#8a2438');
-    c.fillRect(30,3,120*o2p,5);
-    drawText(c, 'O2', 12, 2, '#9ee5ff', 1);
+    c.fillRect(30,3,110*o2p,5);
+    drawText(c, 'AIR', 8, 2, '#9ee5ff', 1);
     drawText(c, m + 'M', VW - textW(m+'M',1) - 3, 2, '#ffffff', 1);
-    if (m >= 900) drawTextC(c, 'ABYSS', VW/2, 14, (g.t/8|0)%2?'#7bffe0':'#b06bff', 1, '#0d1024');
-    if (g.msgT > 0) drawTextC(c, g.msg, VW/2, 68, '#ffd166', 1, '#0d1024');
-    drawTextC(c, 'B: SINK FAST   UP: SLOW', VW/2, 150, '#4a6a9a', 1);
-    if (g.over) bigMsg(c, 'OUT OF AIR', m + ' METRES');
+    /* the round-trip gauge: how much of your air the climb back needs */
+    const needed = clamp(m/900, 0, 1.2);
+    c.fillStyle = '#2a3768'; c.fillRect(30, 9, 110, 1);
+    c.fillStyle = needed > o2p ? '#ff5c7a' : '#7bffe0';
+    c.fillRect(30, 9, Math.min(110, 110*needed), 1);
+    if (needed > o2p * 0.92 && !g.over)
+      drawTextC(c, (g.t/8|0)%2 ? 'TURN BACK NOW' : '', VW/2, 16, '#ff5c7a', 1, '#0d1024');
+    if (g.pearls) drawText(c, 'PEARLS ' + g.pearls, 3, 152, '#ffd166', 1, '#0d1024');
+    drawText(c, g.phase === 'up' ? 'RISING' : 'SINKING', VW-46, 152,
+             g.phase==='up' ? '#7bffe0' : '#9ee5ff', 1, '#0d1024');
+    if (g.msgT > 0) drawTextC(c, g.msg, VW/2, 66, '#ffd166', 1, '#0d1024');
+    if (g.scrape > 0 && !State.opt.noflash){ c.fillStyle = 'rgba(255,92,122,.18)'; c.fillRect(0,0,VW,VH); }
+    if (g.over) bigMsg(c, g.banked ? 'SURFACED' : 'OUT OF AIR', g.banked ? m+'M BANKED' : 'DEPTH LOST');
   }
 });
 
@@ -4178,20 +4737,26 @@ Object.assign(GAMES.aurora, {
       mistakes:0, score:0, over:0, msg:'WATCH THE LIGHTS', msgT:80, maxRound:6};
     this.build();
   },
-  build(){ const g = this.s; g.seq = []; for (let i=0;i<g.round+2;i++) g.seq.push(rndi(4)); g.showI = 0; g.showT = 30; g.state='show'; g.idx=0; },
+  build(){ const g = this.s; g.seq = []; for (let i=0;i<g.round+2;i++) g.seq.push(rndi(4));
+    g.showI = 0; g.showT = 80; g.state = 'pause'; g.idx = 0; },
   update(){
     const g = this.s;
     if (quitCheck()) return;
     g.t++; if (g.msgT>0) g.msgT--; if (g.flashT>0) g.flashT--; else g.flash = -1;
     if (g.over){ if (--g.over <= 0) this.done(); Particles.update(); return; }
+    if (g.state === 'pause'){        /* quiet beat before the lights start */
+      if (--g.showT <= 0){ g.state = 'show'; g.showI = 0; g.showT = 46; }
+      return;
+    }
     if (g.state === 'show'){
       g.showT--;
-      if (g.showT === 22){ g.flash = g.seq[g.showI]; g.flashT = 20;
-        Audio_.blip([523,659,784,1047][g.flash], 0.22, 'triangle', 0.2); }
+      if (g.showT === 30){ g.flash = g.seq[g.showI]; g.flashT = 26;
+        Audio_.blip([523,659,784,1047][g.flash], 0.26, 'triangle', 0.2); }
       if (g.showT <= 0){
         g.showI++;
-        g.showT = Math.max(20, 34 - g.round*2);
-        if (g.showI >= g.seq.length){ g.state = 'input'; g.msg = 'YOUR TURN'; g.msgT = 50; }
+        /* a clear gap between flashes, easing only slightly with the round */
+        g.showT = Math.max(38, 52 - g.round*2);
+        if (g.showI >= g.seq.length){ g.state = 'input'; g.msg = 'YOUR TURN'; g.msgT = 60; }
       }
       return;
     }
@@ -4214,9 +4779,9 @@ Object.assign(GAMES.aurora, {
         }
       } else {
         g.mistakes++; g.idx = 0; Audio_.sfx('fail'); shake();
-        g.msg = 'MISSTEP - WATCH AGAIN'; g.msgT = 70;
+        g.msg = 'MISSTEP - WATCH AGAIN'; g.msgT = 80;
         if (g.mistakes >= 3){ g.over = 70; g.msg = 'THE LIGHTS FADE'; }
-        else { g.state = 'show'; g.showI = 0; g.showT = 40; }
+        else { g.state = 'pause'; g.showI = 0; g.showT = 90; }
       }
     }
     Particles.update();
@@ -4249,10 +4814,15 @@ Object.assign(GAMES.aurora, {
       }
       c.globalAlpha = 1;
       if (on){ c.fillStyle = 'rgba(255,255,255,.30)'; c.fillRect(0, 16+b*22, VW, 4); }
-      /* key hint chip so the mapping is always readable */
-      c.fillStyle = 'rgba(5,10,32,.85)'; c.fillRect(2, 20 + b*22, 11, 11);
-      c.fillStyle = on ? '#ffffff' : AUR_COL[b][0]; c.fillRect(2, 20 + b*22, 11, 1);
-      drawText(c, ['^','<','V','>'][b], 5, 22 + b*22, on ? '#ffffff' : AUR_COL[b][0], 1);
+      /* a big labelled key plate per band, lit when that band fires */
+      const py = 15 + b*22, keyCol = AUR_COL[b][0];
+      c.fillStyle = on ? keyCol : 'rgba(5,10,32,.92)';
+      c.fillRect(3, py, 26, 19);
+      c.fillStyle = keyCol;
+      c.fillRect(3, py, 26, 1); c.fillRect(3, py+18, 26, 1);
+      c.fillRect(3, py, 1, 19); c.fillRect(28, py, 1, 19);
+      GAMES.aurora.arrow(c, 7, py + 4, b, on ? '#05070f' : keyCol);
+      drawText(c, ['UP','LFT','DN','RGT'][b], 18, py + 6, on ? '#05070f' : keyCol, 1);
     }
     /* ice + watchers */
     c.fillStyle = '#0b1230'; c.fillRect(0,118,VW,VH-118);
@@ -4268,7 +4838,16 @@ Object.assign(GAMES.aurora, {
                 midCol: g.state==='show' ? '#8fa3d6' : '#7bffe0'});
     for (let i=0;i<3;i++){ c.fillStyle = i < (3-g.mistakes) ? '#7bffe0' : '#2a3768'; c.fillRect(VW-10-i*6, 13, 4, 4); }
     if (g.msgT > 0) drawTextC(c, g.msg, VW/2, 112, '#ffffff', 1, '#050a20');
+    if (g.state === 'pause') drawTextC(c, 'GET READY...', VW/2, 104, (g.t/14|0)%2 ? '#7bffe0':'#4a6a9a', 1, '#050a20');
     if (g.over) bigMsg(c, g.mistakes===0 && g.round>g.maxRound ? 'FLAWLESS' : 'GOODNIGHT', fmt(g.score)+' PTS');
+  },
+  /* chunky arrow glyph for the key plates */
+  arrow(c, x, y, d, col){
+    c.fillStyle = col;
+    if (d === 0){ c.fillRect(x+3,y,2,2); c.fillRect(x+2,y+2,4,1); c.fillRect(x+1,y+3,6,1); c.fillRect(x+3,y+4,2,6); }
+    else if (d === 2){ c.fillRect(x+3,y,2,6); c.fillRect(x+1,y+6,6,1); c.fillRect(x+2,y+7,4,1); c.fillRect(x+3,y+8,2,2); }
+    else if (d === 1){ c.fillRect(x,y+4,2,2); c.fillRect(x+2,y+3,1,4); c.fillRect(x+3,y+2,1,6); c.fillRect(x+4,y+4,6,2); }
+    else { c.fillRect(x+8,y+4,2,2); c.fillRect(x+7,y+3,1,4); c.fillRect(x+6,y+2,1,6); c.fillRect(x,y+4,6,2); }
   }
 });
 
@@ -4352,12 +4931,51 @@ function boot(){
 function firstRunWelcome(){
   if ($('#modal').classList.contains('show')) return;        /* the file resume prompt owns the screen */
   if (FileSave.status === 'needs-permission') return;
-  if (State.stats.totalRolls || State.lifetimeFish) return;   /* not a new player */
-  modal('Welcome to Seal Vault',
+  /* shown once ever, tracked by a flag - inferring it from progress meant it
+     reappeared on every load until the player happened to earn some fish */
+  if (State.flags.welcomed){ Install.maybeNudge(); return; }
+  const box = modal('Welcome to Seal Vault',
     'You are a seal. So is everyone else.<br><br>Walk the floe with <kbd>ARROWS</kbd> or the pad, press <kbd>A</kbd> at the '+
-    'VAULT GATE to dive into a minigame, and bring fish home for gear and cosmetics.<br><br>'+
-    '<span class="muted">Progress saves in this browser. SYS has a backup file and an auto-save option.</span>',
-    [{t:'LETS GO'},{t:'HOW TO PLAY', fn:()=>UI.open('scr-help')}]);
+    'VAULT GATE to dive into a minigame, and bring fish home for gear and cosmetics.'+
+    '<div style="margin-top:10px">NAME YOUR SEAL</div>'+
+    '<input id="newname" maxlength="8" placeholder="PIP" autocomplete="off" '+
+    'style="width:100%;background:#0a1130;color:var(--ink);border:2px solid var(--line);border-radius:6px;padding:6px;margin-top:4px">'+
+    '<div class="muted" style="margin-top:8px">Progress saves in this browser. SYS has a backup file and an auto-save option.</div>',
+    [{t:'LETS GO', keep:true},{t:'HOW TO PLAY', keep:true}]);
+  const inp = box.querySelector('#newname');
+  const btns = box.querySelectorAll('.row button');
+  const commit = ()=>{
+    const v = cleanName(inp.value);
+    if (v) State.name = v;
+    State.flags.welcomed = 1;
+    saveGame(); UI.refreshTop(); closeModal();
+    setTimeout(()=>{ if (!UI.anyOpen()) Install.maybeNudge(); }, 500);
+  };
+  btns[0].onclick = commit;
+  btns[1].onclick = ()=>{ commit(); UI.open('scr-help'); };
+  inp.addEventListener('keydown', e=>{ if (e.code === 'Enter'){ e.preventDefault(); commit(); } });
+  setTimeout(()=>{ try { inp.focus(); } catch(e){} }, 60);
+}
+function cleanName(v){
+  return String(v || '').replace(/[^A-Za-z0-9 ]/g,'').trim().toUpperCase().slice(0,8);
+}
+/* rename from anywhere: SYS, or the wardrobe preview */
+function renameSeal(after){
+  const box = modal('Name your seal',
+    '<input id="nmbox" maxlength="8" autocomplete="off" value="'+State.name+'" '+
+    'style="width:100%;background:#0a1130;color:var(--ink);border:2px solid var(--line);border-radius:6px;padding:6px">'+
+    '<div class="muted" style="margin-top:6px">UP TO 8 LETTERS OR NUMBERS.</div>',
+    [{t:'SAVE', keep:true},{t:'CANCEL'}]);
+  const inp = box.querySelector('#nmbox');
+  const commit = ()=>{
+    const v = cleanName(inp.value);
+    if (v) State.name = v;
+    closeModal(); saveGame(); UI.refreshTop();
+    if (after) after();
+  };
+  box.querySelector('.row button').onclick = commit;
+  inp.addEventListener('keydown', e=>{ if (e.code === 'Enter'){ e.preventDefault(); commit(); } });
+  setTimeout(()=>{ try { inp.focus(); inp.select(); } catch(e){} }, 60);
 }
 /* debug/test hook - lets a harness drive the game without a human */
 window.SV = {State:()=>State, COS:COS, GAMES:GAMES, start:startGame, scene:()=>Scene.name, UI:UI,
